@@ -6,7 +6,7 @@ import numpy as np
 import io
 
 st.set_page_config(page_title="CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS", page_icon="🧮", layout="centered")
-st.title(" CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS")
+st.title("🧮 CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS")
 st.caption("Versión 1 – Cálculo mínimo de personal con base en horas requeridas, ausentismo y vacaciones. La rotación y descansos se añadirán en la V2.")
 
 # ---- Sidebar: explicación breve ----
@@ -155,7 +155,7 @@ if n_turnos_dia > 0:
             turno_asignado = turnos[(turno_inicio_idx + semana) % n_turnos_dia]
             
             # Calculamos los días de descanso para la semana actual
-            descanso_semana_inicio = (dia_descanso_inicio_idx + semana) % 7
+            descanso_semana_inicio = (dia_descanso_inicio_idx + semana * 2) % 7
             dias_descanso_semana = [(descanso_semana_inicio + j) % 7 for j in range(dias_descanso)]
             
             for dia_idx, dia_nombre in enumerate(dias_de_la_semana):
@@ -174,10 +174,10 @@ if n_turnos_dia > 0:
         dias_descanso = 2
         
         turno_inicio_idx = i % n_turnos_dia
-        dia_descanso_inicio_idx = (i * (dias_trabajo + dias_descanso) + 3) % 7 # Patrón de descanso diferente
+        dia_descanso_inicio_idx = (i * (dias_trabajo + dias_descanso) + 3) % 7
 
         for semana in range(4):
-            turno_asignado = turnos[(turno_inicio_idx + semana) % n_turnos_dia]
+            turno_asignado = turnos[(i + semana) % n_turnos_dia]
             dias_descanso_semana = [(dia_descanso_inicio_idx + j) % 7 for j in range(dias_descanso)]
             
             for dia_idx, dia_nombre in enumerate(dias_de_la_semana):
@@ -197,52 +197,55 @@ for dia_col in columnas:
             
             # Buscar un operador adicional disponible
             for op_adicional in personal_adicional:
-                if programacion_df.loc[op_adicional, dia_col] != "Descansa":
-                    programacion_df.loc[op_adicional, dia_col] = f"Cubre {op_actual}"
-                    break
+                if programacion_df.loc[op_adicional, dia_col] == "Descansa":
+                    continue
+                
+                # Encontrar el turno que el operador adicional debe cubrir
+                # Se asume que el turno a cubrir es el que el operador principal tendría si no descansara
+                turno_cubierto_idx = (personal_actual.index(op_actual) % n_turnos_dia + semana) % n_turnos_dia
+                turno_a_cubrir = turnos[turno_cubierto_idx]
+                
+                programacion_df.loc[op_adicional, dia_col] = f"Cubre {turno_a_cubrir}"
+                break
 
 # Creamos las tablas finales para cada turno
 programacion_por_turno_final = {turno: pd.DataFrame(index=[], columns=columnas) for turno in turnos}
 
 for operador in personal_total:
+    # Determinamos el primer turno de trabajo asignado para este operador
     primer_turno_asignado = ""
+    es_op_actual = operador in personal_actual
+    
+    if es_op_actual:
+        # Para los operadores actuales, el turno base es el asignado en la primera semana
+        semana_idx = 0
+        turno_inicio_idx = personal_actual.index(operador) % n_turnos_dia
+        primer_turno_asignado = turnos[turno_inicio_idx]
+    else:
+        # Para los operadores adicionales, los distribuimos de manera uniforme
+        semana_idx = 0
+        turno_inicio_idx = personal_adicional.index(operador) % n_turnos_dia
+        primer_turno_asignado = turnos[turno_inicio_idx]
+
+    # Añadir al operador a la tabla de su turno base
+    programacion_por_turno_final[primer_turno_asignado].loc[operador] = ""
+
+    # Llenamos la programación para los 28 días
     for dia_col in columnas:
-        if "Turno" in programacion_df.loc[operador, dia_col]:
-            primer_turno_asignado = programacion_df.loc[operador, dia_col]
-            break
-    
-    if not primer_turno_asignado and operador in personal_adicional:
-        # En el caso de los operadores adicionales que solo cubren, su turno "base" no es relevante
-        # Los agregamos a todas las tablas para que su rol de "Cubre" sea visible
-        for turno in turnos:
-            programacion_por_turno_final[turno].loc[operador] = ""
-    
-    elif primer_turno_asignado:
-        # Añadir al operador a la tabla de su turno base
-        programacion_por_turno_final[primer_turno_asignado].loc[operador] = ""
-
-        # Llenamos la programación para los 28 días
-        for dia_col in columnas:
-            valor = programacion_df.loc[operador, dia_col]
-            
-            if valor.startswith("Turno"):
-                programacion_por_turno_final[valor].loc[operador, dia_col] = "Trabaja"
-            elif valor == "Descansa":
-                programacion_por_turno_final[primer_turno_asignado].loc[operador, dia_col] = "Descansa"
-            elif valor.startswith("Cubre"):
-                turno_cubierto = valor.split("Cubre ")[1]
-                # Esta parte necesita una corrección. Ahora solo necesitamos saber si está cubriendo
-                programacion_por_turno_final[turno_cubierto].loc[operador, dia_col] = "Cubre"
-
+        valor = programacion_df.loc[operador, dia_col]
+        
+        if valor.startswith("Turno"):
+            programacion_por_turno_final[valor].loc[operador, dia_col] = "Trabaja"
+        elif valor == "Descansa":
+            programacion_por_turno_final[primer_turno_asignado].loc[operador, dia_col] = "Descansa"
+        elif valor.startswith("Cubre"):
+            turno_cubierto = valor.split("Cubre ")[1]
+            programacion_por_turno_final[turno_cubierto].loc[operador, dia_col] = "Cubre"
 
 # Nuevo enfoque de visualización para evitar filas vacías
 for turno, df in programacion_por_turno_final.items():
-    filas_a_mostrar = []
-    for operador in df.index:
-        if df.loc[operador].any():
-            filas_a_mostrar.append(operador)
-    
-    if filas_a_mostrar:
+    filas_a_mostrar = df.loc[(df != "").any(axis=1)].index
+    if not filas_a_mostrar.empty:
         df_limpio = df.loc[filas_a_mostrar]
         st.subheader(f"Programación {turno}")
         st.dataframe(df_limpio)
