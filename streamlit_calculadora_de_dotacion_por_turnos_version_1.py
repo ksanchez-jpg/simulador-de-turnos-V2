@@ -1,79 +1,79 @@
 import pandas as pd
 from io import BytesIO
 
-# -----------------------------
-# Función para generar la programación
-# -----------------------------
+# === CONFIGURACIÓN DESDE TU SELECTBOX EXISTENTE ===
+turno_opcion = st.selectbox(
+    "Configuración de turnos",
+    ["3 turnos de 8 horas", "2 turnos de 12 horas", "4 turnos de 6 horas"]
+)
+
+if turno_opcion == "3 turnos de 8 horas":
+    num_turnos = 3
+    horas_turno = 8
+elif turno_opcion == "2 turnos de 12 horas":
+    num_turnos = 2
+    horas_turno = 12
+else:
+    num_turnos = 4
+    horas_turno = 6
+
+# === FUNCIÓN PARA GENERAR PROGRAMACIÓN ===
 def generar_programacion(num_turnos, horas_turno, operadores_totales):
-    semanas = 4
     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-    
-    # Nombres de operadores
+    semanas = 4
+    horas_semanales = 42
+    horas_totales_4s = horas_semanales * semanas
+    horas_diarias = horas_turno
+
+    tablas = {}
     operadores = [f"OP{i+1}" for i in range(operadores_totales)]
-    
-    # Distribución inicial de operadores entre turnos
-    base_por_turno = operadores_totales // num_turnos
-    extras = operadores_totales % num_turnos
-    operadores_por_turno = []
-    start = 0
-    for t in range(num_turnos):
-        end = start + base_por_turno + (1 if t < extras else 0)
-        operadores_por_turno.append(operadores[start:end])
-        start = end
+    adicionales_count = 0
 
-    # Programación por turno
-    tablas_turnos = {}
-    op_ad_count = 1
-
-    for turno_inicial in range(1, num_turnos+1):
-        filas = []
-        for op in operadores_por_turno[turno_inicial-1]:
+    for turno in range(1, num_turnos + 1):
+        data = []
+        for op in operadores:
             fila = {"Operador": op}
-            turno_actual = turno_inicial
-            dias_descanso_usados = []
-            for semana in range(1, semanas+1):
-                # Seleccionar día de descanso (distinto cada semana)
-                dia_descanso = dias_semana[(semana - 1) % len(dias_semana)]
-                while dia_descanso in dias_descanso_usados:
-                    dia_descanso = dias_semana[(dias_semana.index(dia_descanso) + 1) % len(dias_semana)]
-                dias_descanso_usados.append(dia_descanso)
+            turno_actual = (turno + operadores.index(op)) % num_turnos + 1
+            dias_descanso = set()
+            horas_acumuladas = 0
 
+            for semana in range(semanas):
+                # Rotación semanal
+                turno_semana = ((turno_actual - 1 + semana) % num_turnos) + 1
                 for dia in dias_semana:
-                    col = f"S{semana}-{dia}"
-                    if dia == dia_descanso:
-                        fila[col] = f"Descansa (OP-AD{op_ad_count})"
-                        op_ad_count += 1
+                    if semana > 0 and dia == "Lunes" and not descanso_previo:
+                        fila[f"Semana {semana+1} - {dia}"] = f"Turno{turno_semana}"
+                        horas_acumuladas += horas_diarias
                     else:
-                        # Cambio de turno después de descanso
-                        if dia == "Lunes" and dias_semana[dias_semana.index(dia) - 1] == dia_descanso:
-                            turno_actual = (turno_actual % num_turnos) + 1
-                        fila[col] = f"Turno {turno_actual}"
-            filas.append(fila)
-        
-        df_turno = pd.DataFrame(filas)
-        tablas_turnos[turno_inicial] = df_turno
-    
-    return tablas_turnos
+                        if len(dias_descanso) < semanas:
+                            dias_descanso.add(dia)
+                            adicionales_count += 1
+                            fila[f"Semana {semana+1} - {dia}"] = f"Descansa (OP-AD{adicionales_count})"
+                        else:
+                            fila[f"Semana {semana+1} - {dia}"] = f"Turno{turno_semana}"
+                            horas_acumuladas += horas_diarias
+                descanso_previo = dia in dias_descanso
+            data.append(fila)
+        tablas[f"Turno {turno}"] = pd.DataFrame(data)
+    return tablas
 
-# -----------------------------
-# Generar programación y mostrar/descargar
-# -----------------------------
+# === LLAMADA A LA FUNCIÓN USANDO TU CÁLCULO EXISTENTE ===
+# Aquí 'operadores_totales' DEBE venir de tu cálculo previo
 tablas = generar_programacion(num_turnos, horas_turno, operadores_totales)
 
-for turno, df in tablas.items():
-    st.subheader(f"Programación Turno {turno}")
+# === MOSTRAR Y DESCARGAR TABLAS ===
+for nombre_turno, df in tablas.items():
+    st.subheader(nombre_turno)
     st.dataframe(df)
 
-    # Convertir a Excel en memoria
     output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name=f"Turno {turno}")
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False)
     excel_data = output.getvalue()
 
     st.download_button(
-        label=f"📥 Descargar Turno {turno} en Excel",
+        label=f"📥 Descargar {nombre_turno}",
         data=excel_data,
-        file_name=f"turno_{turno}.xlsx",
+        file_name=f"{nombre_turno}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
