@@ -218,7 +218,9 @@ else:
             df.to_excel(writer, index=False, sheet_name=sheet_name[:31])
         resumen.to_excel(writer, index=False, sheet_name="Resumen")
     st.download_button(
-        label="📥 Descargar TODO (todas las tablas en un solo Excel)",
-        data=out_all.getvalue(),
-        file_name="programacion_4semanas_turnos.xlsx"
+    label="Descargar programación en Excel",
+    data=excel_bytes,
+    file_name="programacion_4semanas_turnos.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
 
