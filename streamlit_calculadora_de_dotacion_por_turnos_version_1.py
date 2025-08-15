@@ -1,6 +1,5 @@
-import streamlit as st
 import pandas as pd
-import math
+from io import BytesIO
 
 # -----------------------------
 # Función para generar la programación
@@ -45,13 +44,10 @@ def generar_programacion(num_turnos, horas_turno, operadores_totales):
                         fila[col] = f"Descansa (OP-AD{op_ad_count})"
                         op_ad_count += 1
                     else:
-                        if semana == 1:
-                            fila[col] = f"Turno {turno_actual}"
-                        else:
-                            # Cambio de turno solo después de descanso
-                            if dia == "Lunes" and dias_semana[dias_semana.index(dia) - 1] == dia_descanso:
-                                turno_actual = (turno_actual % num_turnos) + 1
-                            fila[col] = f"Turno {turno_actual}"
+                        # Cambio de turno después de descanso
+                        if dia == "Lunes" and dias_semana[dias_semana.index(dia) - 1] == dia_descanso:
+                            turno_actual = (turno_actual % num_turnos) + 1
+                        fila[col] = f"Turno {turno_actual}"
             filas.append(fila)
         
         df_turno = pd.DataFrame(filas)
@@ -59,26 +55,25 @@ def generar_programacion(num_turnos, horas_turno, operadores_totales):
     
     return tablas_turnos
 
-
 # -----------------------------
-# Configuración desde selector
+# Generar programación y mostrar/descargar
 # -----------------------------
-config = st.selectbox("Configuración de turnos", ["3 turnos de 8 horas", "2 turnos de 12 horas", "4 turnos de 6 horas"])
+tablas = generar_programacion(num_turnos, horas_turno, operadores_totales)
 
-if config.startswith("3"):
-    num_turnos, horas_turno = 3, 8
-elif config.startswith("2"):
-    num_turnos, horas_turno = 2, 12
-else:
-    num_turnos, horas_turno = 4, 6
+for turno, df in tablas.items():
+    st.subheader(f"Programación Turno {turno}")
+    st.dataframe(df)
 
-# Ejemplo: aquí deberías poner tu cálculo real de operadores necesarios
-operadores_totales = st.number_input("Operadores totales requeridos", min_value=1, value=18)
+    # Convertir a Excel en memoria
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name=f"Turno {turno}")
+    excel_data = output.getvalue()
 
-if st.button("Generar programación"):
-    tablas = generar_programacion(num_turnos, horas_turno, operadores_totales)
-    for turno, df in tablas.items():
-        st.subheader(f"Turno {turno}")
-        st.dataframe(df)
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button(f"Descargar Turno {turno}", data=csv, file_name=f"turno_{turno}.csv", mime="text/csv")
+    st.download_button(
+        label=f"📥 Descargar Turno {turno} en Excel",
+        data=excel_data,
+        file_name=f"turno_{turno}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
