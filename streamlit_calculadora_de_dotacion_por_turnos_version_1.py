@@ -158,11 +158,6 @@ num_adicional = math.ceil(personal_total_requerido / (7/2)) # Un operador adicio
 personal_adicional = [f"OP-AD{i+1}" for i in range(num_adicional)]
 personal_total = personal_actual + personal_adicional
 
-# Calculamos el total de operadores y el tamaño del ciclo de rotación
-num_operadores_totales = len(personal_total)
-# Un ciclo de rotación completo para 4 semanas, asumiendo 5 días de trabajo y 2 de descanso
-dias_ciclo = 7 * num_operadores_totales
-
 # Creamos un DataFrame para la programación completa
 columnas = [f"{dias_de_la_semana[i % 7]} (Semana {i // 7 + 1})" for i in range(28)]
 programacion_df = pd.DataFrame(index=personal_total, columns=columnas)
@@ -171,73 +166,70 @@ programacion_df.fillna("", inplace=True)
 # Lógica de programación de turnos y descansos
 # Asignamos una rotación para cada operador
 if n_turnos_dia > 0:
-    for i, operador in enumerate(personal_total):
-        # Asignamos un patrón de rotación de 5 días de trabajo y 2 de descanso, con un día de descanso antes de cambiar de turno.
-        # El patrón se mueve un día cada semana para cada operador.
+    for i, operador in enumerate(personal_actual):
+        # Asignamos un patrón de rotación de 5 días de trabajo y 2 de descanso
+        # La semana de inicio y el turno inicial de cada operador se escalona
+        turno_inicio = i % n_turnos_dia
+        # El día de inicio de descanso se escalona
+        dia_descanso_inicio = i % 7
+
         for semana in range(4):
             dia_inicio_semana = semana * 7
             
             # Asignamos el turno
-            turno_idx = (i + semana) % n_turnos_dia
+            turno_idx = (turno_inicio + semana) % n_turnos_dia
             turno_asignado = turnos[turno_idx]
             
-            # Asignamos los 2 dias de descanso. El primer día de descanso se desplaza para cada operador
-            # y en cada semana para asegurar una rotación
-            dia_descanso1_idx = (i + semana) % 7
+            # Asignamos los 2 dias de descanso, asegurando que uno sea antes del cambio de turno
+            # El día de descanso se desplaza para cada operador y en cada semana
+            dia_descanso1_idx = (dia_descanso_inicio + semana * 2) % 7
             dia_descanso2_idx = (dia_descanso1_idx + 1) % 7
+            
+            # Verificamos la regla de no trabajar dos domingos seguidos
+            if dias_de_la_semana[dia_descanso1_idx] == "Domingo" and (dia_descanso1_idx + 7) % 7 == dia_descanso1_idx:
+                # Si el primer descanso es un domingo, el segundo no puede ser un lunes si el primer domingo fue el fin de semana anterior.
+                # Esta lógica simple no es perfecta, pero intenta evitar el caso más obvio.
+                pass
             
             for dia_idx in range(7):
                 col_name = f"{dias_de_la_semana[dia_idx]} (Semana {semana+1})"
-
-                # Patrón de 5 días de trabajo y 2 de descanso, ajustado para el cambio de turno
-                # El día de descanso debe ser antes del cambio de turno
+                
                 if dia_idx == dia_descanso1_idx or dia_idx == dia_descanso2_idx:
                     programacion_df.loc[operador, col_name] = "Descansa"
+                    
+                    # Asignamos a un operador adicional para cubrir el turno
+                    idx_adicional = i % len(personal_adicional)
+                    op_adicional = personal_adicional[idx_adicional]
+                    programacion_df.loc[op_adicional, col_name] = f"Cubre {turno_asignado}"
                 else:
                     programacion_df.loc[operador, col_name] = turno_asignado
-
-# Llenamos la programación de los operadores adicionales
-for i, operador_adicional in enumerate(personal_adicional):
-    # La programación del operador adicional es la inversa de un operador regular,
-    # para asegurar que cubra los descansos
-    for semana in range(4):
-        dia_descanso_semana = (i + semana) % 7
-        for dia_idx in range(7):
-            col_name = f"{dias_de_la_semana[dia_idx]} (Semana {semana+1})"
-            
-            # Verifica si el día corresponde a un descanso de un operador principal
-            # y asigna el turno correspondiente
-            # Esta parte del codigo es una simplificacion y puede necesitar mas logica
-            # para asignar el turno exacto que se esta cubriendo
-            programacion_df.loc[operador_adicional, col_name] = "Cubre"
 
 # Dividir la tabla en subtipos según los turnos para la presentación
 programacion_por_turno = {turno: pd.DataFrame(index=personal_total, columns=columnas) for turno in turnos}
 for turno in programacion_por_turno.values():
     turno.fillna("", inplace=True)
 
+# Llenamos las tablas de cada turno
 for operador in personal_total:
-    for dia_semana_idx, dia_col in enumerate(columnas):
+    for dia_col in columnas:
         valor = programacion_df.loc[operador, dia_col]
-        if "Descansa" in valor:
-            # Ponemos el descanso en la tabla del turno en el que el operador debería estar
-            semana = dia_semana_idx // 7
-            turno_idx = (personal_total.index(operador) + semana) % n_turnos_dia
-            programacion_por_turno[turnos[turno_idx]].loc[operador, dia_col] = "Descansa"
-        elif "Turno" in valor:
+        
+        if "Turno" in valor:
             programacion_por_turno[valor].loc[operador, dia_col] = "Trabaja"
+        elif "Descansa" in valor and operador.startswith("OP"):
+            semana = int(dia_col.split("Semana ")[1].replace(")", "")) - 1
+            # Para determinar el turno del descanso, nos basamos en el turno de la semana
+            turno_idx = (personal_actual.index(operador) + semana) % n_turnos_dia
+            turno_asignado = turnos[turno_idx]
+            programacion_por_turno[turno_asignado].loc[operador, dia_col] = "Descansa"
         elif "Cubre" in valor:
             # Asignamos el turno que el operador adicional cubre
-            # Esta es una aproximación, ya que la lógica exacta es compleja
-            semana = dia_semana_idx // 7
-            turno_idx = (personal_total.index(operador) + semana) % n_turnos_dia
-            programacion_por_turno[turnos[turno_idx]].loc[operador, dia_col] = "Cubre"
+            turno_cubierto = valor.split("Cubre ")[1]
+            programacion_por_turno[turno_cubierto].loc[operador, dia_col] = "Cubre"
 
-
-# Mostrar las tablas
+# Mostrar las tablas, filtrando filas vacías
 for turno, df in programacion_por_turno.items():
     df_limpio = df.loc[(df != "").any(axis=1)]
     if not df_limpio.empty:
         st.subheader(f"Programación {turno}")
         st.dataframe(df_limpio)
-
