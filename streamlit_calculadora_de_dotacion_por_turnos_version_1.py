@@ -148,8 +148,9 @@ st.divider()
 st.header("🗓️ Programación de Turnos (Versión V2)")
 st.info("Esta programación de 4 semanas muestra la rotación de turnos y los días de descanso.")
 
-# Generar una lista de días del mes (4 semanas)
-dias_del_mes = [f"Día {i+1}" for i in range(28)]
+# Generar una lista de días del mes (4 semanas) con los nombres de la semana
+dias_de_la_semana_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+dias_del_mes = dias_de_la_semana_nombres * 4
 
 # Generar una lista de turnos
 turnos = [f"Turno {i+1}" for i in range(n_turnos_dia)]
@@ -207,6 +208,7 @@ for persona_idx, persona in enumerate(programacion_df.index):
                 # Asumimos que los OP-AD cubren el turno del operador principal al que reemplazan
                 op_principal_idx = persona_idx
                 if op_principal_idx < len(personal):
+                    # El día de descanso es el mismo, así que el turno a cubrir es el del día anterior
                     turno_cubierto = programacion_df.loc[personal[op_principal_idx], dias_del_mes[(dia_idx-1+28)%28]]
                     if "Turno" in turno_cubierto:
                         programacion_por_turno[turno_cubierto].loc[persona, dia] = "Cubre"
@@ -218,3 +220,4 @@ for turno, df in programacion_por_turno.items():
     if not df_limpio.empty:
         st.subheader(f"Programación {turno}")
         st.dataframe(df_limpio)
+
