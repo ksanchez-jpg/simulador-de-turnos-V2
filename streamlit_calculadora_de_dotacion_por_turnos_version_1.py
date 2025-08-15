@@ -35,7 +35,7 @@ def generar_programacion(num_turnos, horas_turno, operadores_totales):
         tablas[f"Turno {turno}"] = pd.DataFrame(data)
     return tablas
 
-# Usamos los valores que ya calculaste arriba
+# 👇 Esto debe ir después de que ya calculaste n_turnos_dia, horas_por_turno y personal_total_requerido
 tablas = generar_programacion(n_turnos_dia, horas_por_turno, personal_total_requerido)
 
 st.subheader("📅 Programación de turnos (4 semanas)")
