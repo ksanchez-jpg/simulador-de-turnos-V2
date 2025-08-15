@@ -2,6 +2,7 @@ import math
 import streamlit as st
 import json
 import pandas as pd
+import numpy as np
 
 st.set_page_config(page_title="CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS", page_icon="🧮", layout="centered")
 st.title("🧮 CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS")
@@ -145,82 +146,75 @@ st.download_button(
 
 st.divider()
 st.header("🗓️ Programación de Turnos (Versión V2)")
-st.info("Esta programación es un ejemplo para una semana. Considera los turnos y días de descanso.")
+st.info("Esta programación de 4 semanas muestra la rotación de turnos y los días de descanso.")
 
-# Generar una lista de días de la semana
-dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-dias_a_programar = dias_semana[:dias_cubrir]
+# Generar una lista de días del mes (4 semanas)
+dias_del_mes = [f"Día {i+1}" for i in range(28)]
 
-# Generar una lista de turnos (ej. Turno 1, Turno 2, etc.)
+# Generar una lista de turnos
 turnos = [f"Turno {i+1}" for i in range(n_turnos_dia)]
 
 # Crear una lista de personal con nombres genéricos
 personal = [f"{cargo} {i+1}" for i in range(personal_total_requerido)]
 
-# Crear una lista de personal adicional para cubrir descansos
-num_adicional = math.ceil(personal_total_requerido / dias_cubrir)
+# Calcular el número de operadores adicionales necesarios (un extra por cada 7 días cubiertos)
+num_adicional = math.ceil(personal_total_requerido / 7) if dias_cubrir == 7 else math.ceil(personal_total_requerido / dias_cubrir)
 personal_adicional = [f"OP-AD {i+1}" for i in range(num_adicional)]
 
-# Llenar la programación de manera rotativa
-programacion_general_df = pd.DataFrame(index=personal, columns=dias_a_programar)
-programacion_general_df = programacion_general_df.fillna("")
+# Crear un DataFrame para la programación completa
+programacion_df = pd.DataFrame(index=personal + personal_adicional, columns=dias_del_mes)
+programacion_df = programacion_df.fillna("")
 
-# Distribuir personal por turno de manera rotativa
-for dia_idx, dia in enumerate(dias_a_programar):
-    for turno_idx, turno in enumerate(turnos):
-        start_idx = (dia_idx * n_turnos_dia + turno_idx) * min_operadores_turno
-        end_idx = start_idx + min_operadores_turno
-        for i in range(start_idx, end_idx):
-            if i < len(personal):
-                programacion_general_df.loc[personal[i], dia] = turno
-
-# Asignar un día de descanso rotativo a cada persona y reemplazar
+# Lógica de asignación de turnos y descansos
+# Asumimos una rotación simple: un día de descanso cada 7 días.
 for i, persona in enumerate(personal):
-    dia_descanso_idx = i % dias_cubrir
-    dia_descanso = dias_a_programar[dia_descanso_idx]
-    
-    # Si la persona no está asignada a un turno ese día (puede pasar si no hay suficientes)
-    if not programacion_general_df.loc[persona, dia_descanso]:
-        continue
-
-    turno_a_cubrir = programacion_general_df.loc[persona, dia_descanso]
-    programacion_general_df.loc[persona, dia_descanso] = "descansa"
-
-    # Asignar a un operador adicional si está disponible
-    if i < len(personal_adicional):
-        op_adicional = personal_adicional[i]
-        if op_adicional in programacion_general_df.index:
-            programacion_general_df.loc[op_adicional, dia_descanso] = turno_a_cubrir
-        else:
-            # Si el OP-AD no está en el índice, se agrega
-            programacion_general_df.loc[op_adicional] = ""
-            programacion_general_df.loc[op_adicional, dia_descanso] = turno_a_cubrir
-
-# Dividir la tabla en subtipos según la imagen
-programacion_por_turno = {}
-personal_por_turno = {turno: [] for turno in turnos}
-
-# Agrupar el personal por el primer turno asignado
-for persona in personal:
-    primer_turno = programacion_general_df.loc[persona, dias_a_programar[0]]
-    if primer_turno in turnos:
-        personal_por_turno[primer_turno].append(persona)
-
-# Crear DataFrames separados para cada turno
-for turno in turnos:
-    sub_personal = personal_por_turno[turno]
-    df_turno = programacion_general_df.loc[sub_personal]
-    
-    # Agregar las filas de los operadores adicionales a cada tabla según sea necesario
-    filas_adicionales = [op for op in personal_adicional if op in df_turno.index]
-    if filas_adicionales:
-        df_turno = pd.concat([df_turno, programacion_general_df.loc[filas_adicionales]])
+    for dia_idx in range(28):
+        dia = dias_del_mes[dia_idx]
         
-    programacion_por_turno[turno] = df_turno
+        # Asignar un día de descanso rotativo cada 7 días
+        if (dia_idx + i) % 7 == 0:
+            programacion_df.loc[persona, dia] = "descansa"
+            # Asignar operador adicional para cubrir el descanso
+            op_adicional_idx = i % len(personal_adicional)
+            programacion_df.loc[personal_adicional[op_adicional_idx], dia] = "Cubre descanso"
+        else:
+            # Asignar turnos de manera rotativa
+            turno_idx = (dia_idx + i) % n_turnos_dia
+            programacion_df.loc[persona, dia] = turnos[turno_idx]
+
+# Dividir la tabla en subtipos según los turnos
+programacion_por_turno = {turno: pd.DataFrame(index=[], columns=dias_del_mes) for turno in turnos}
+for turno in turnos:
+    programacion_por_turno[turno] = pd.DataFrame(index=programacion_df.index, columns=dias_del_mes)
+    programacion_por_turno[turno] = programacion_por_turno[turno].fillna("")
+
+# Llenar las tablas de cada turno
+for persona_idx, persona in enumerate(programacion_df.index):
+    for dia_idx, dia in enumerate(dias_del_mes):
+        valor = programacion_df.loc[persona, dia]
+        if "Turno" in valor:
+            turno_asignado = valor
+            programacion_por_turno[turno_asignado].loc[persona, dia] = "X"
+        elif "descansa" in valor:
+            # Asignar el día de descanso en la tabla correspondiente
+            # En este caso, lo ponemos en la tabla del turno del primer día para visualización
+            if "Turno" in programacion_df.loc[persona, dias_del_mes[0]]:
+                primer_turno_asignado = programacion_df.loc[persona, dias_del_mes[0]]
+                programacion_por_turno[primer_turno_asignado].loc[persona, dia] = "descansa"
+        elif "Cubre descanso" in valor:
+             # Asignar el reemplazo en la tabla del turno que cubre
+            if persona.startswith("OP-AD"):
+                # Asumimos que los OP-AD cubren el turno del operador principal al que reemplazan
+                op_principal_idx = persona_idx
+                if op_principal_idx < len(personal):
+                    turno_cubierto = programacion_df.loc[personal[op_principal_idx], dias_del_mes[(dia_idx-1+28)%28]]
+                    if "Turno" in turno_cubierto:
+                        programacion_por_turno[turno_cubierto].loc[persona, dia] = "Cubre"
 
 # Mostrar las tablas
 for turno, df in programacion_por_turno.items():
-    if not df.empty:
+    # Limpiar filas vacías para una mejor presentación
+    df_limpio = df[df.apply(lambda row: any(row), axis=1)]
+    if not df_limpio.empty:
         st.subheader(f"Programación {turno}")
-        st.dataframe(df)
-
+        st.dataframe(df_limpio)
