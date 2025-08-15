@@ -201,7 +201,6 @@ for dia_col in columnas:
                     continue
                 
                 # Encontrar el turno que el operador adicional debe cubrir
-                # Se asume que el turno a cubrir es el que el operador principal tendría si no descansara
                 turno_cubierto_idx = (personal_actual.index(op_actual) % n_turnos_dia + semana) % n_turnos_dia
                 turno_a_cubrir = turnos[turno_cubierto_idx]
                 
@@ -212,25 +211,20 @@ for dia_col in columnas:
 programacion_por_turno_final = {turno: pd.DataFrame(index=[], columns=columnas) for turno in turnos}
 
 for operador in personal_total:
-    # Determinamos el primer turno de trabajo asignado para este operador
     primer_turno_asignado = ""
     es_op_actual = operador in personal_actual
     
     if es_op_actual:
-        # Para los operadores actuales, el turno base es el asignado en la primera semana
         semana_idx = 0
         turno_inicio_idx = personal_actual.index(operador) % n_turnos_dia
         primer_turno_asignado = turnos[turno_inicio_idx]
     else:
-        # Para los operadores adicionales, los distribuimos de manera uniforme
         semana_idx = 0
         turno_inicio_idx = personal_adicional.index(operador) % n_turnos_dia
         primer_turno_asignado = turnos[turno_inicio_idx]
 
-    # Añadir al operador a la tabla de su turno base
     programacion_por_turno_final[primer_turno_asignado].loc[operador] = ""
 
-    # Llenamos la programación para los 28 días
     for dia_col in columnas:
         valor = programacion_df.loc[operador, dia_col]
         
