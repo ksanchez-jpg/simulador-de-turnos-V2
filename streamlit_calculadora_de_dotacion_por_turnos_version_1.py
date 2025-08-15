@@ -6,7 +6,7 @@ import numpy as np
 import io
 
 st.set_page_config(page_title="CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS", page_icon="🧮", layout="centered")
-st.title("🧮 CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS")
+st.title(" CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS")
 st.caption("Versión 1 – Cálculo mínimo de personal con base en horas requeridas, ausentismo y vacaciones. La rotación y descansos se añadirán en la V2.")
 
 # ---- Sidebar: explicación breve ----
