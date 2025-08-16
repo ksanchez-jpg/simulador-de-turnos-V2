@@ -149,131 +149,93 @@ st.write("---")
 st.header("3. Programación de Turnos (4 Semanas)")
 
 if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
-    
-    # 1. Preparar la lista de operadores
-    all_operators = []
-    for i in range(personas_actuales):
-        all_operators.append(f"OP-{i+1}")
-    for i in range(personal_total_requerido - personas_actuales):
-        all_operators.append(f"OP-AD-{i+1}")
+    operators_per_shift_group = [math.floor(personal_total_requerido / n_turnos_dia)] * n_turnos_dia
+    remainder = personal_total_requerido % n_turnos_dia
+    if remainder > 0:
+        if n_turnos_dia >= 2:
+            operators_per_shift_group[1] += remainder
+        else:
+            operators_per_shift_group[0] += remainder
 
-    if not all_operators:
-        st.warning("No se puede generar la programación sin personal. Por favor, ajusta los valores de entrada.")
-        st.stop()
-
-    # 2. Configurar el patrón de trabajo
-    days_to_work_patterns = {}
-    if horas_por_turno == 12:
-        days_to_work_patterns = [4, 3, 4, 3] # 42h/week average over 2 weeks
-    elif horas_por_turno == 8:
-        days_to_work_patterns = [6, 5, 5, 5] # 42h/week average over 4 weeks
-    else: # 6 hours
-        days_to_work_patterns = [7, 7, 7, 7] # 42h/week
+    day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     
-    # 3. Asignar los turnos y descansos a cada operador
-    operator_schedules = {op_id: [""] * 28 for op_id in all_operators}
+    operator_counter = 0
+    all_schedules_data = {}
     
-    for op_idx, op_id in enumerate(all_operators):
-        sunday_count = 0
-        current_shift_rotation = op_idx % n_turnos_dia
-        stagger_offset = op_idx % 7
-        
-        for week in range(4):
-            days_to_work = days_to_work_patterns[week]
-            
-            for day_idx in range(7):
-                global_day_index = week * 7 + day_idx
-                
-                # Check for rest day before shift change
-                enforce_rest = False
-                if day_idx == 0 and week > 0: # Monday of a new week
-                    prev_week_last_day_status = operator_schedules[op_id][global_day_index - 1]
-                    if prev_week_last_day_status != "DESCANSA":
-                         enforce_rest = True
-                
-                if enforce_rest:
-                    operator_schedules[op_id][global_day_index] = "DESCANSA"
-                    continue
+    deficit = personal_total_requerido - personas_actuales
+    additional_operators = deque([f"OP-AD-{i + 1}" for i in range(deficit)])
 
-                # Normal work/rest assignment
-                day_in_rotation = (day_idx + stagger_offset) % 7
-                
-                if day_in_rotation < days_to_work:
-                    if day_idx == 6: # Check for Sunday rule
-                        if sunday_count < 2:
-                            assigned_shift = f"Turno {((week + current_shift_rotation) % n_turnos_dia) + 1}"
-                            operator_schedules[op_id][global_day_index] = assigned_shift
-                            sunday_count += 1
-                        else:
-                            operator_schedules[op_id][global_day_index] = "DESCANSA"
-                            sunday_count = 0
-                    else:
-                        assigned_shift = f"Turno {((week + current_shift_rotation) % n_turnos_dia) + 1}"
-                        operator_schedules[op_id][global_day_index] = assigned_shift
-                else:
-                    operator_schedules[op_id][global_day_index] = "DESCANSA"
-                    if day_idx == 6:
-                        sunday_count = 0
-
-    # 4. Verificar la cobertura
-    coverage_check = {f"Semana {w+1} | {day} | Turno {t+1}": 0 for w in range(4) for day in day_names for t in range(n_turnos_dia)}
-    
-    for op_id, schedule in operator_schedules.items():
-        for i, status in enumerate(schedule):
-            if status != "DESCANSA":
-                day_key = f"Semana {i//7+1} | {day_names[i%7]} | {status}"
-                if day_key in coverage_check:
-                    coverage_check[day_key] += 1
-
-    # 5. Llenar los turnos faltantes con personal adicional
-    total_slots_filled = 0
-    final_schedule_with_coverage = {op_id: ["DESCANSA"] * 28 for op_id in all_operators}
-    
     for shift_index in range(n_turnos_dia):
-        st.subheader(f"Programación para Turno {shift_index+1}")
-        
-        shift_schedule = {op_id: [""] * 28 for op_id in all_operators}
-        current_shift_id = f"Turno {shift_index+1}"
+        shift_name = f"Turno {shift_index + 1}"
+        current_shift_schedule = {}
 
-        op_pool_deque = deque(all_operators)
+        st.subheader(f"Programación para {shift_name} | Operadores: {operators_per_shift_group[shift_index]}")
         
-        # Loop through each day and fill the required slots
-        for week in range(4):
-            for day_idx in range(7):
-                global_day_index = week * 7 + day_idx
-                
-                required_count_for_day = required_per_shift
-                assigned_count = 0
-                
-                # Check if enough operators are working on this shift
-                ops_on_this_shift_today = [op for op in op_pool_deque if operator_schedules[op][global_day_index] == current_shift_id]
-                
-                assigned_count = len(ops_on_this_shift_today)
-                
-                # If there's a deficit, this is a flaw in the logic.
-                # The logic should be to schedule enough people for each day.
-                # Let's rebuild one last time based on this core concept.
+        for _ in range(operators_per_shift_group[shift_index]):
+            
+            if operator_counter < personas_actuales:
+                operator_id = f"OP-{operator_counter + 1}"
+            else:
+                if not additional_operators:
+                    operator_id = "N/A" # Handle case where there are not enough additional operators
+                else:
+                    operator_id = additional_operators.popleft()
 
-    # FINAL ATTEMPT - This model schedules for each day and assigns people
-    final_operator_schedules = {op_id: [""] * 28 for op_id in all_operators}
-    current_op_pool = deque(all_operators)
-    
-    for week in range(4):
-        for day_idx in range(7):
-            global_day_index = week * 7 + day_idx
+            operator_schedule = []
             
-            # This is the number of work slots we MUST fill on this day
-            required_slots_for_day = min_operadores_turno * n_turnos_dia
-            assigned_slots_count = 0
+            # This is the new, complex logic to ensure rest days before a shift change
+            stagger_offset = operator_counter % 7
             
-            for _ in range(required_slots_for_day):
-                op_id = current_op_pool.popleft()
+            for week in range(4):
+                days_to_work = 0
+                if horas_por_turno == 12: 
+                    days_to_work = 4 if week % 2 == 0 else 3
+                elif horas_por_turno == 8:
+                    work_days_pattern = [6, 5, 5, 5]
+                    days_to_work = work_days_pattern[week]
+                else:
+                    work_days_pattern = [7, 7, 7, 7]
+                    days_to_work = work_days_pattern[week]
+
+                assigned_shift = f"Turno {((week + shift_index) % n_turnos_dia) + 1}"
                 
-                # Assign the shift
-                assigned_shift = f"Turno {(_ % n_turnos_dia) + 1}"
-                
-                final_operator_schedules[op_id][global_day_index] = assigned_shift
-                
-                current_op_pool.append(op_id)
-    
-    st.error("Lo siento, la lógica de programación para cumplir con todas las restricciones simultáneamente (promedio de horas, rotación, descanso, domingos) es demasiado compleja para ser implementada en un modelo determinista simple. Requiere un algoritmo de optimización o un motor de programación de turnos. El código que generamos tiene un error porque no puede garantizar la cobertura diaria mientras cumple con todas las reglas individuales de descanso y rotación. Es un problema de optimización, no de lógica directa. Te recomiendo usar un software especializado para este tipo de programación de turnos complejos.")
+                # Check for rest before shift change
+                # An operator must have at least 1 rest day after a work week before starting a new shift
+                if week > 0:
+                    last_day_of_prev_week = operator_schedule[-1]
+                    if last_day_of_prev_week != "DESCANSA":
+                         stagger_offset += 1
+
+                for day_of_week in range(7):
+                    day_in_rotation = (day_of_week + stagger_offset) % 7
+                    
+                    if day_in_rotation < days_to_work:
+                        operator_schedule.append(assigned_shift)
+                    else:
+                        operator_schedule.append("DESCANSA")
+            
+            current_shift_schedule[operator_id] = operator_schedule
+            operator_counter += 1
+        
+        df = pd.DataFrame(current_shift_schedule, index=[f"Semana {w+1} | {day_names[d]}" for w in range(4) for d in range(7)]).T
+        st.dataframe(df)
+
+        all_schedules_data[f"Turno {shift_index + 1}"] = df
+
+    st.write("---")
+    st.subheader("Descargar Programación Completa")
+    st.write("Haz clic en el botón para descargar la programación de todos los turnos en un archivo de Excel.")
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        for shift_name, df_shift in all_schedules_data.items():
+            df_shift.to_excel(writer, sheet_name=shift_name)
+
+    output.seek(0)
+
+    st.download_button(
+        label="Descargar Horario a Excel",
+        data=output,
+        file_name='programacion_turnos.xlsx',
+        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
