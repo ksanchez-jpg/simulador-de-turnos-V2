@@ -142,100 +142,184 @@ st.download_button(
 )
 
 # ---
-# Lógica de programación de turnos
+# Lógica CORREGIDA de programación de turnos
 # ---
 
 st.write("---")
 st.header("3. Programación de Turnos (4 Semanas)")
 
 if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
-    operators_per_shift_group = [math.floor(personal_total_requerido / n_turnos_dia)] * n_turnos_dia
-    remainder = personal_total_requerido % n_turnos_dia
-    if remainder > 0:
-        if n_turnos_dia >= 2:
-            operators_per_shift_group[1] += remainder
-        else:
-            operators_per_shift_group[0] += remainder
-
-    day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     
-    operator_counter = 0
-    all_schedules_data = {}
+    # Crear lista de todos los operadores
+    all_operators = []
+    for i in range(personas_actuales):
+        all_operators.append(f"OP-{i + 1}")
     
     deficit = personal_total_requerido - personas_actuales
-    additional_operators = deque([f"OP-AD-{i + 1}" for i in range(deficit)])
-
-    for shift_index in range(n_turnos_dia):
-        shift_name = f"Turno {shift_index + 1}"
-        current_shift_schedule = {}
-
-        st.subheader(f"Programación para {shift_name} | Operadores: {operators_per_shift_group[shift_index]}")
-        
-        for _ in range(operators_per_shift_group[shift_index]):
+    if deficit > 0:
+        for i in range(deficit):
+            all_operators.append(f"OP-AD-{i + 1}")
+    
+    total_operators = len(all_operators)
+    
+    # Validar que tenemos suficientes operadores
+    if total_operators < min_operadores_turno * n_turnos_dia:
+        st.error(f"No hay suficientes operadores para cubrir todos los turnos. Se necesitan al menos {min_operadores_turno * n_turnos_dia} operadores.")
+        st.stop()
+    
+    # Crear matriz de programación: [operador][dia_absoluto] = turno_asignado
+    # Día absoluto: 0-27 (4 semanas * 7 días)
+    total_days = 4 * 7  # 28 días
+    schedule_matrix = {}
+    
+    # Inicializar matriz
+    for operator in all_operators:
+        schedule_matrix[operator] = ["DESCANSA"] * total_days
+    
+    # Calcular días de trabajo por operador según horas por turno
+    if horas_por_turno == 12:
+        # Para turnos de 12h: alternar 4 y 3 días por semana
+        work_patterns = [[4, 3, 4, 3], [3, 4, 3, 4]]  # Dos patrones alternados
+    elif horas_por_turno == 8:
+        # Para turnos de 8h: aproximadamente 5-6 días por semana
+        work_patterns = [[5, 6, 5, 6], [6, 5, 6, 5]]
+    else:  # 6 horas
+        # Para turnos de 6h: 6-7 días por semana
+        work_patterns = [[6, 7, 6, 7], [7, 6, 7, 6]]
+    
+    # Asignar operadores a turnos de manera equitativa
+    operators_per_shift = total_operators // n_turnos_dia
+    extra_operators = total_operators % n_turnos_dia
+    
+    shift_operators = []
+    operator_index = 0
+    
+    for shift in range(n_turnos_dia):
+        shift_size = operators_per_shift + (1 if shift < extra_operators else 0)
+        shift_ops = all_operators[operator_index:operator_index + shift_size]
+        shift_operators.append(shift_ops)
+        operator_index += shift_size
+    
+    # Programar cada operador
+    for shift_idx, shift_ops in enumerate(shift_operators):
+        for op_idx, operator in enumerate(shift_ops):
+            # Seleccionar patrón de trabajo
+            pattern_idx = op_idx % len(work_patterns)
+            work_pattern = work_patterns[pattern_idx]
             
-            if operator_counter < personas_actuales:
-                operator_id = f"OP-{operator_counter + 1}"
-            else:
-                if not additional_operators:
-                    operator_id = "N/A" # Handle case where there are not enough additional operators
-                else:
-                    operator_id = additional_operators.popleft()
-
-            operator_schedule = []
+            # Offset para distribuir descansos
+            rest_offset = op_idx % 7
             
-            # This is the new, complex logic to ensure rest days before a shift change
-            stagger_offset = operator_counter % 7
+            # Turno base del operador (rotará cada semana)
+            base_shift = shift_idx
             
             for week in range(4):
-                days_to_work = 0
-                if horas_por_turno == 12: 
-                    days_to_work = 4 if week % 2 == 0 else 3
-                elif horas_por_turno == 8:
-                    work_days_pattern = [6, 5, 5, 5]
-                    days_to_work = work_days_pattern[week]
-                else:
-                    work_days_pattern = [7, 7, 7, 7]
-                    days_to_work = work_days_pattern[week]
-
-                assigned_shift = f"Turno {((week + shift_index) % n_turnos_dia) + 1}"
+                week_start = week * 7
+                days_to_work = work_pattern[week]
                 
-                # Check for rest before shift change
-                # An operator must have at least 1 rest day after a work week before starting a new shift
+                # El turno cambia cada semana, pero solo si descansó el día anterior
+                current_shift = (base_shift + week) % n_turnos_dia
+                shift_name = f"Turno {current_shift + 1}"
+                
+                # Si es cambio de turno (week > 0), verificar descanso previo
                 if week > 0:
-                    last_day_of_prev_week = operator_schedule[-1]
-                    if last_day_of_prev_week != "DESCANSA":
-                         stagger_offset += 1
-
-                for day_of_week in range(7):
-                    day_in_rotation = (day_of_week + stagger_offset) % 7
-                    
-                    if day_in_rotation < days_to_work:
-                        operator_schedule.append(assigned_shift)
+                    prev_day = week_start - 1
+                    if schedule_matrix[operator][prev_day] != "DESCANSA":
+                        # Forzar descanso en el primer día de la nueva semana
+                        schedule_matrix[operator][week_start] = "DESCANSA"
+                        days_to_work = max(0, days_to_work - 1)
+                        work_start = 1
                     else:
-                        operator_schedule.append("DESCANSA")
+                        work_start = 0
+                else:
+                    work_start = 0
+                
+                # Asignar días de trabajo en la semana con offset para distribuir descansos
+                work_days_assigned = 0
+                for day_offset in range(7):
+                    if work_days_assigned >= days_to_work:
+                        break
+                    
+                    day_in_week = (day_offset + rest_offset) % 7
+                    absolute_day = week_start + day_in_week
+                    
+                    if day_in_week >= work_start and schedule_matrix[operator][absolute_day] == "DESCANSA":
+                        schedule_matrix[operator][absolute_day] = shift_name
+                        work_days_assigned += 1
+    
+    # Verificar cobertura mínima por turno y día, ajustar si es necesario
+    day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    
+    for day in range(total_days):
+        if day % 7 >= dias_cubrir:  # Solo verificar días que se deben cubrir
+            continue
             
-            current_shift_schedule[operator_id] = operator_schedule
-            operator_counter += 1
-        
-        df = pd.DataFrame(current_shift_schedule, index=[f"Semana {w+1} | {day_names[d]}" for w in range(4) for d in range(7)]).T
-        st.dataframe(df)
-
-        all_schedules_data[f"Turno {shift_index + 1}"] = df
-
-    st.write("---")
-    st.subheader("Descargar Programación Completa")
-    st.write("Haz clic en el botón para descargar la programación de todos los turnos en un archivo de Excel.")
-
+        for shift in range(n_turnos_dia):
+            shift_name = f"Turno {shift + 1}"
+            operators_in_shift = sum(1 for op in all_operators if schedule_matrix[op][day] == shift_name)
+            
+            if operators_in_shift < min_operadores_turno:
+                # Buscar operadores que descansan ese día para asignarlos
+                shortage = min_operadores_turno - operators_in_shift
+                available_operators = [op for op in all_operators if schedule_matrix[op][day] == "DESCANSA"]
+                
+                for i in range(min(shortage, len(available_operators))):
+                    schedule_matrix[available_operators[i]][day] = shift_name
+    
+    # Convertir a formato de visualización
+    display_schedule = {}
+    for operator in all_operators:
+        display_schedule[operator] = schedule_matrix[operator]
+    
+    # Crear DataFrame para mostrar
+    week_day_labels = []
+    for week in range(4):
+        for day in range(7):
+            if day < dias_cubrir:
+                week_day_labels.append(f"Semana {week+1} | {day_names[day]}")
+            else:
+                week_day_labels.append(f"Semana {week+1} | {day_names[day]} (No cubre)")
+    
+    df_schedule = pd.DataFrame(display_schedule, index=week_day_labels).T
+    
+    st.subheader("Programación Completa de Turnos")
+    st.dataframe(df_schedule)
+    
+    # Verificación de cobertura
+    st.subheader("Verificación de Cobertura Mínima")
+    coverage_data = []
+    
+    for day in range(total_days):
+        day_name = week_day_labels[day]
+        if day % 7 < dias_cubrir:  # Solo días que se deben cubrir
+            for shift in range(n_turnos_dia):
+                shift_name = f"Turno {shift + 1}"
+                operators_count = sum(1 for op in all_operators if schedule_matrix[op][day] == shift_name)
+                status = "✅ OK" if operators_count >= min_operadores_turno else f"❌ Faltan {min_operadores_turno - operators_count}"
+                coverage_data.append({
+                    "Día": day_name,
+                    "Turno": shift_name,
+                    "Operadores": operators_count,
+                    "Mínimo": min_operadores_turno,
+                    "Estado": status
+                })
+    
+    coverage_df = pd.DataFrame(coverage_data)
+    st.dataframe(coverage_df)
+    
+    # Botón de descarga
+    st.subheader("Descargar Programación")
     output = io.BytesIO()
+    
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        for shift_name, df_shift in all_schedules_data.items():
-            df_shift.to_excel(writer, sheet_name=shift_name)
-
+        df_schedule.to_excel(writer, sheet_name='Programación Completa')
+        coverage_df.to_excel(writer, sheet_name='Verificación Cobertura', index=False)
+    
     output.seek(0)
-
+    
     st.download_button(
-        label="Descargar Horario a Excel",
+        label="Descargar Programación Completa en Excel",
         data=output,
-        file_name='programacion_turnos.xlsx',
+        file_name='programacion_turnos_corregida.xlsx',
         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
