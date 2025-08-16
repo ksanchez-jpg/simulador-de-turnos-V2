@@ -146,96 +146,96 @@ st.download_button(
 # ---
 
 st.write("---")
-
 st.header("3. Programación de Turnos (4 Semanas)")
 
-operators_per_shift_group = [math.floor(personal_total_requerido / n_turnos_dia)] * n_turnos_dia
-remainder = personal_total_requerido % n_turnos_dia
-if remainder > 0:
-    if n_turnos_dia >= 2:
-        operators_per_shift_group[1] += remainder
-    else:
-        operators_per_shift_group[0] += remainder
-
-day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-
-# Global counter for unique operator IDs
-operator_counter = 0
-
-# Queue for additional operators
-deficit = personal_total_requerido - personas_actuales
-additional_operators = deque([f"OP-AD-{i + 1}" for i in range(deficit)])
-
-# Dictionary to hold the final schedule data for all shifts
-all_schedules_data = {}
-
-# Generate a schedule for EACH daily shift group
-for shift_index in range(n_turnos_dia):
-    shift_name = f"Turno {shift_index + 1}"
-    current_shift_schedule = {}
-
-    st.subheader(f"Programación para {shift_name} | Operadores: {operators_per_shift_group[shift_index]}")
-
-    for _ in range(operators_per_shift_group[shift_index]):
-        if operator_counter < personas_actuales:
-            operator_id = f"OP-{operator_counter + 1}"
+if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
+    operators_per_shift_group = [math.floor(personal_total_requerido / n_turnos_dia)] * n_turnos_dia
+    remainder = personal_total_requerido % n_turnos_dia
+    if remainder > 0:
+        if n_turnos_dia >= 2:
+            operators_per_shift_group[1] += remainder
         else:
-            operator_id = additional_operators.popleft()
+            operators_per_shift_group[0] += remainder
 
-        operator_schedule = []
-        sunday_count = 0
-        
-        if horas_por_turno == 12:
-            work_days_pattern = [4, 3, 4, 3]
-        elif horas_por_turno == 8:
-            work_days_pattern = [5, 6, 5, 5]
-        else: # 6-hour shifts
-            work_days_pattern = [7, 7, 7, 7]
-        
-        stagger_offset = operator_counter % 7
-        
-        for week in range(4):
-            days_to_work = work_days_pattern[week]
-            
-            assigned_shift = f"Turno {((week + shift_index) % n_turnos_dia) + 1}"
-
-            for day_of_week in range(7):
-                day_in_rotation = (day_of_week + stagger_offset) % 7
-                
-                if day_in_rotation < days_to_work:
-                    if day_of_week == 6 and sunday_count < 2:
-                        operator_schedule.append(assigned_shift)
-                        sunday_count += 1
-                    elif day_of_week == 6 and sunday_count >= 2:
-                        operator_schedule.append("DESCANSA")
-                        sunday_count = 0
-                    else:
-                         operator_schedule.append(assigned_shift)
-                else:
-                    operator_schedule.append("DESCANSA")
-        
-        current_shift_schedule[operator_id] = operator_schedule
-        operator_counter += 1
+    day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     
-    df = pd.DataFrame(current_shift_schedule, index=[f"Semana {w+1} | {day_names[d]}" for w in range(4) for d in range(7)]).T
-    st.dataframe(df)
+    operator_counter = 0
+    all_schedules_data = {}
+    
+    deficit = personal_total_requerido - personas_actuales
+    additional_operators = deque([f"OP-AD-{i + 1}" for i in range(deficit)])
 
-    all_schedules_data[f"Turno {shift_index + 1}"] = df
+    for shift_index in range(n_turnos_dia):
+        shift_name = f"Turno {shift_index + 1}"
+        current_shift_schedule = {}
 
-st.write("---")
-st.subheader("Descargar Programación Completa")
-st.write("Haz clic en el botón para descargar la programación de todos los turnos en un archivo de Excel.")
+        st.subheader(f"Programación para {shift_name} | Operadores: {operators_per_shift_group[shift_index]}")
+        
+        for _ in range(operators_per_shift_group[shift_index]):
+            
+            if operator_counter < personas_actuales:
+                operator_id = f"OP-{operator_counter + 1}"
+            else:
+                if not additional_operators:
+                    operator_id = "N/A" # Handle case where there are not enough additional operators
+                else:
+                    operator_id = additional_operators.popleft()
 
-output = io.BytesIO()
-with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-    for shift_name, df_shift in all_schedules_data.items():
-        df_shift.to_excel(writer, sheet_name=shift_name)
+            operator_schedule = []
+            
+            # This is the new, complex logic to ensure rest days before a shift change
+            stagger_offset = operator_counter % 7
+            
+            for week in range(4):
+                days_to_work = 0
+                if horas_por_turno == 12: 
+                    days_to_work = 4 if week % 2 == 0 else 3
+                elif horas_por_turno == 8:
+                    work_days_pattern = [6, 5, 5, 5]
+                    days_to_work = work_days_pattern[week]
+                else:
+                    work_days_pattern = [7, 7, 7, 7]
+                    days_to_work = work_days_pattern[week]
 
-output.seek(0)
+                assigned_shift = f"Turno {((week + shift_index) % n_turnos_dia) + 1}"
+                
+                # Check for rest before shift change
+                # An operator must have at least 1 rest day after a work week before starting a new shift
+                if week > 0:
+                    last_day_of_prev_week = operator_schedule[-1]
+                    if last_day_of_prev_week != "DESCANSA":
+                         stagger_offset += 1
 
-st.download_button(
-    label="Descargar Horario a Excel",
-    data=output,
-    file_name='programacion_turnos.xlsx',
-    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-)
+                for day_of_week in range(7):
+                    day_in_rotation = (day_of_week + stagger_offset) % 7
+                    
+                    if day_in_rotation < days_to_work:
+                        operator_schedule.append(assigned_shift)
+                    else:
+                        operator_schedule.append("DESCANSA")
+            
+            current_shift_schedule[operator_id] = operator_schedule
+            operator_counter += 1
+        
+        df = pd.DataFrame(current_shift_schedule, index=[f"Semana {w+1} | {day_names[d]}" for w in range(4) for d in range(7)]).T
+        st.dataframe(df)
+
+        all_schedules_data[f"Turno {shift_index + 1}"] = df
+
+    st.write("---")
+    st.subheader("Descargar Programación Completa")
+    st.write("Haz clic en el botón para descargar la programación de todos los turnos en un archivo de Excel.")
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        for shift_name, df_shift in all_schedules_data.items():
+            df_shift.to_excel(writer, sheet_name=shift_name)
+
+    output.seek(0)
+
+    st.download_button(
+        label="Descargar Horario a Excel",
+        data=output,
+        file_name='programacion_turnos.xlsx',
+        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
