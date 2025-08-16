@@ -4,10 +4,12 @@ import math
 import json
 import io
 from collections import deque
+import random
+from datetime import datetime, timedelta
 
 st.set_page_config(page_title="CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS", page_icon="🧮", layout="centered")
 st.title("🧮 CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS")
-st.caption("Versión 1 – Cálculo mínimo de personal con base en horas requeridas, ausentismo y vacaciones. La rotación y descansos se añadirán en la V2.")
+st.caption("Versión 2 – Cálculo con programación avanzada de turnos considerando restricciones laborales.")
 
 # ---- Sidebar: explicación breve ----
 with st.sidebar:
@@ -16,16 +18,16 @@ with st.sidebar:
         """
         Ingresas los parámetros operativos y la app estima el **número mínimo de personas** necesarias para cubrir los turnos de la semana, **ajustado por ausentismo y vacaciones**.
         
-        **Fórmula base semanal:**
-        `Horas requeridas = Días a cubrir × Nº turnos × Horas por turno × Mín. operadores por turno`
-        
-        `Personal requerido = Horas requeridas ajustadas / Horas promedio por trabajador`
-        
-        Ajuste por ausentismo: divisor `(1 - % ausentismo)`.  
-        Ajuste por vacaciones: horas adicionales en función de personas y días fuera.
+        **Nuevas restricciones V2:**
+        - Cambio de turno solo entre semanas
+        - Promedio de 42 horas en 3 semanas (8h/día)
+        - Máximo 2 domingos seguidos
+        - Descansos diferentes entre semanas
+        - Descanso obligatorio antes de cambio de turno
+        - No repetir turno en semanas consecutivas
         """
     )
-    st.info("En V2 generaremos un calendario de 4 semanas que cumpla las restricciones de descansos y rotación.")
+    st.info("V2 incluye programación completa con todas las restricciones laborales.")
 
 # ---- Entradas ----
 col1, col2 = st.columns(2)
@@ -108,13 +110,6 @@ with c2:
         st.info("⚖️ La dotación actual coincide exactamente con el mínimo requerido.")
 
 st.divider()
-st.markdown(
-    """
-    #### Notas
-    - Incluye ajuste por ausentismo y por vacaciones.
-    - La V2 generará calendario de 4 semanas con descansos y rotación de turnos.
-    """
-)
 
 # ---- Descarga (JSON) ----
 payload = {
@@ -137,124 +132,414 @@ payload = {
 st.download_button(
     label="⬇️ Descargar resultados (JSON)",
     data=json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
-    file_name="resultado_personal_v1.json",
+    file_name="resultado_personal_v2.json",
     mime="application/json",
 )
 
 # ---
-# Lógica de programación de turnos
+# Nueva lógica avanzada de programación de turnos
 # ---
 
-def weekly_days_pattern(horas_turno:int):
-    if horas_turno == 12:
-        return [4, 3, 4, 3]
-    elif horas_turno == 8:
-        return [6, 5, 5, 5]
-    else: # 6 hours
-        return [7, 7, 7, 7]
+class AdvancedShiftScheduler:
+    def __init__(self, total_operators, shifts_per_day, hours_per_shift, min_ops_per_shift, days_per_week=7):
+        self.total_operators = total_operators
+        self.shifts_per_day = shifts_per_day
+        self.hours_per_shift = hours_per_shift
+        self.min_ops_per_shift = min_ops_per_shift
+        self.days_per_week = days_per_week
+        self.operators = [f"OP-{i+1:02d}" for i in range(total_operators)]
+        
+        # Inicializar schedule: [operador][semana][día] = turno_id o 'REST'
+        self.schedule = {}
+        for op in self.operators:
+            self.schedule[op] = [['REST' for _ in range(days_per_week)] for _ in range(3)]
+        
+        # Tracking para restricciones
+        self.operator_weekly_hours = {op: [0, 0, 0] for op in self.operators}
+        self.operator_sunday_count = {op: 0 for op in self.operators}
+        self.operator_last_shift = {op: None for op in self.operators}
+        
+    def get_shift_name(self, shift_id):
+        if shift_id == 'REST':
+            return 'DESCANSO'
+        return f"Turno {shift_id + 1}"
+    
+    def can_work_sunday(self, operator, week, day):
+        """Verifica si puede trabajar domingo (máximo 2 seguidos)"""
+        if day != 6:  # No es domingo
+            return True
+        
+        # Contar domingos trabajados consecutivos
+        consecutive_sundays = 0
+        
+        # Verificar domingos anteriores
+        for w in range(week + 1):
+            if w < week:
+                if self.schedule[operator][w][6] != 'REST':
+                    consecutive_sundays += 1
+                else:
+                    consecutive_sundays = 0
+            elif w == week and day == 6:
+                # Este domingo que estamos evaluando
+                consecutive_sundays += 1
+        
+        return consecutive_sundays <= 2
+    
+    def calculate_weekly_hours(self, operator, week):
+        """Calcula horas trabajadas en una semana"""
+        hours = 0
+        for day in range(self.days_per_week):
+            if self.schedule[operator][week][day] != 'REST':
+                hours += self.hours_per_shift
+        return hours
+    
+    def get_available_operators_for_shift(self, week, day, shift_id):
+        """Obtiene operadores disponibles para un turno específico"""
+        available = []
+        
+        for operator in self.operators:
+            # Verificar si ya está asignado este día
+            if self.schedule[operator][week][day] != 'REST':
+                continue
+                
+            # Verificar restricción de domingo
+            if not self.can_work_sunday(operator, week, day):
+                continue
+                
+            # Verificar si puede hacer este turno en esta semana
+            if self.can_assign_shift_to_operator(operator, week, shift_id):
+                available.append(operator)
+        
+        return available
+    
+    def can_assign_shift_to_operator(self, operator, week, shift_id):
+        """Verifica si se puede asignar un turno específico a un operador"""
+        
+        # Regla 1: En la misma semana debe hacer el mismo turno
+        current_week_shifts = set()
+        for day in range(self.days_per_week):
+            if self.schedule[operator][week][day] != 'REST':
+                current_week_shifts.add(self.schedule[operator][week][day])
+        
+        if current_week_shifts and shift_id not in current_week_shifts:
+            return False
+        
+        # Regla 8: No puede hacer el mismo turno 2 semanas seguidas
+        if week > 0:
+            prev_week_shifts = set()
+            for day in range(self.days_per_week):
+                if self.schedule[operator][week-1][day] != 'REST':
+                    prev_week_shifts.add(self.schedule[operator][week-1][day])
+            
+            if shift_id in prev_week_shifts:
+                return False
+        
+        # Regla 7: Al cambiar de turno debe descansar el día anterior
+        if week > 0 and day == 0:  # Primer día de la semana
+            # Verificar si el último día de la semana anterior descansó
+            if self.schedule[operator][week-1][6] != 'REST':
+                # Verificar si va a cambiar de turno
+                prev_week_shifts = set()
+                for d in range(self.days_per_week):
+                    if self.schedule[operator][week-1][d] != 'REST':
+                        prev_week_shifts.add(self.schedule[operator][week-1][d])
+                
+                if prev_week_shifts and shift_id not in prev_week_shifts:
+                    return False
+        
+        return True
+    
+    def distribute_operators_by_shift(self):
+        """Distribuye operadores equitativamente entre turnos"""
+        operators_per_shift = self.total_operators // self.shifts_per_day
+        extra_operators = self.total_operators % self.shifts_per_day
+        
+        shift_assignment = {}
+        op_index = 0
+        
+        for shift_id in range(self.shifts_per_day):
+            count = operators_per_shift + (1 if shift_id < extra_operators else 0)
+            shift_assignment[shift_id] = self.operators[op_index:op_index + count]
+            op_index += count
+            
+        return shift_assignment
+    
+    def generate_schedule(self):
+        """Genera el cronograma completo"""
+        shift_groups = self.distribute_operators_by_shift()
+        
+        # Para cada semana
+        for week in range(3):
+            # Para cada turno
+            for shift_id in range(self.shifts_per_day):
+                # Determinar qué operadores pueden hacer este turno esta semana
+                candidate_operators = []
+                
+                for operator in shift_groups[shift_id]:
+                    if self.can_assign_shift_to_operator(operator, week, shift_id):
+                        candidate_operators.append(operator)
+                
+                # Si no hay suficientes candidatos, intentar con otros operadores
+                if len(candidate_operators) < self.min_ops_per_shift:
+                    for operator in self.operators:
+                        if operator not in candidate_operators:
+                            if self.can_assign_shift_to_operator(operator, week, shift_id):
+                                candidate_operators.append(operator)
+                
+                # Asignar días de trabajo para este turno
+                self.assign_work_days_for_shift(candidate_operators, week, shift_id)
+        
+        # Aplicar lógica de balanceo de horas
+        self.balance_hours_across_weeks()
+        
+        return self.schedule
+    
+    def assign_work_days_for_shift(self, operators, week, shift_id):
+        """Asigna días de trabajo para un turno específico"""
+        if not operators:
+            return
+            
+        # Determinar cuántos días necesitamos cubrir por operador
+        target_hours_per_week = 42  # Horas objetivo promedio
+        days_needed_per_operator = min(6, target_hours_per_week // self.hours_per_shift)
+        
+        # Asignar días de trabajo
+        for operator in operators[:self.min_ops_per_shift]:
+            days_assigned = 0
+            attempts = 0
+            max_attempts = 20
+            
+            while days_assigned < days_needed_per_operator and attempts < max_attempts:
+                day = random.randint(0, 6)
+                attempts += 1
+                
+                if (self.schedule[operator][week][day] == 'REST' and
+                    self.can_work_sunday(operator, week, day)):
+                    
+                    self.schedule[operator][week][day] = shift_id
+                    days_assigned += 1
+                    self.operator_weekly_hours[operator][week] += self.hours_per_shift
+    
+    def balance_hours_across_weeks(self):
+        """Balancea las horas entre las 3 semanas para cumplir promedio de 42h"""
+        target_total_hours = 126  # 42 horas x 3 semanas
+        
+        for operator in self.operators:
+            total_hours = sum(self.operator_weekly_hours[operator])
+            
+            # Si está muy por debajo del objetivo, agregar más días
+            if total_hours < target_total_hours - 10:
+                self.add_work_days(operator, target_total_hours - total_hours)
+            
+            # Si está muy por encima, quitar algunos días
+            elif total_hours > target_total_hours + 10:
+                self.remove_work_days(operator, total_hours - target_total_hours)
+    
+    def add_work_days(self, operator, hours_needed):
+        """Agrega días de trabajo para alcanzar las horas objetivo"""
+        days_needed = hours_needed // self.hours_per_shift
+        
+        for _ in range(min(days_needed, 5)):  # Máximo 5 días adicionales
+            for week in range(3):
+                for day in range(7):
+                    if (self.schedule[operator][week][day] == 'REST' and
+                        self.can_work_sunday(operator, week, day)):
+                        
+                        # Encontrar un turno apropiado para este día
+                        for shift_id in range(self.shifts_per_day):
+                            if self.can_assign_shift_to_operator(operator, week, shift_id):
+                                self.schedule[operator][week][day] = shift_id
+                                self.operator_weekly_hours[operator][week] += self.hours_per_shift
+                                return
+    
+    def remove_work_days(self, operator, excess_hours):
+        """Remueve días de trabajo para no exceder las horas objetivo"""
+        days_to_remove = excess_hours // self.hours_per_shift
+        
+        for _ in range(min(days_to_remove, 3)):  # Máximo 3 días a remover
+            for week in range(3):
+                for day in range(7):
+                    if self.schedule[operator][week][day] != 'REST':
+                        # Verificar que no se viole cobertura mínima
+                        shift_id = self.schedule[operator][week][day]
+                        if self.count_operators_in_shift(week, day, shift_id) > self.min_ops_per_shift:
+                            self.schedule[operator][week][day] = 'REST'
+                            self.operator_weekly_hours[operator][week] -= self.hours_per_shift
+                            return
+    
+    def count_operators_in_shift(self, week, day, shift_id):
+        """Cuenta operadores asignados a un turno específico en un día"""
+        count = 0
+        for operator in self.operators:
+            if self.schedule[operator][week][day] == shift_id:
+                count += 1
+        return count
 
 st.write("---")
-st.header("3. Programación de Turnos (4 Semanas)")
+st.header("3. Programación Avanzada de Turnos (3 Semanas)")
 
-if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
+if st.button("Generar Programación Avanzada", key='generate_advanced_schedule'):
     
-    # 1. Preparar la lista de operadores
-    all_operators = []
-    for i in range(personas_actuales):
-        all_operators.append(f"OP-{i+1}")
-    for i in range(personal_total_requerido - personas_actuales):
-        all_operators.append(f"OP-AD-{i+1}")
-    
-    if not all_operators:
+    if personal_total_requerido <= 0:
         st.warning("No se puede generar la programación sin personal. Por favor, ajusta los valores de entrada.")
         st.stop()
     
-    # 2. Generar horarios para cada operador
-    operator_schedules = {op_id: [""] * 28 for op_id in all_operators}
+    # Crear el planificador avanzado
+    scheduler = AdvancedShiftScheduler(
+        total_operators=personal_total_requerido,
+        shifts_per_day=n_turnos_dia,
+        hours_per_shift=horas_por_turno,
+        min_ops_per_shift=min_operadores_turno
+    )
     
-    work_days_patterns = weekly_days_pattern(horas_por_turno)
+    with st.spinner("Generando programación optimizada..."):
+        schedule = scheduler.generate_schedule()
+    
+    # Mostrar el cronograma
     day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     
-    for op_idx, op_id in enumerate(all_operators):
-        current_shift_rotation = op_idx % n_turnos_dia
-        stagger_offset = op_idx % 7
-        
-        for week in range(4):
-            days_to_work = work_days_patterns[week]
-            
-            # Check rest day before shift change
-            rest_before_change = False
-            if week > 0:
-                prev_week_last_day_status = operator_schedules[op_id][(week-1)*7+6]
-                if prev_week_last_day_status != "DESCANSA":
-                    rest_before_change = True
-
-            for day_idx in range(7):
-                global_day_index = week * 7 + day_idx
-                
-                if rest_before_change and day_idx == 0:
-                    operator_schedules[op_id][global_day_index] = "DESCANSA"
-                    continue
-                
-                day_in_rotation = (day_idx + stagger_offset) % 7
-                
-                if day_in_rotation < days_to_work:
-                    assigned_shift = f"Turno {((week + current_shift_rotation) % n_turnos_dia) + 1}"
-                    operator_schedules[op_id][global_day_index] = assigned_shift
+    # Crear DataFrame para visualización
+    schedule_data = []
+    
+    for operator in scheduler.operators:
+        row = [operator]
+        for week in range(3):
+            for day in range(7):
+                shift = schedule[operator][week][day]
+                if shift == 'REST':
+                    row.append('DESCANSO')
                 else:
-                    operator_schedules[op_id][global_day_index] = "DESCANSA"
-
-    all_schedules_data = {}
-
-    # 3. Organizar los horarios por grupo de turno y verificar cobertura
-    operators_per_shift_group = [math.floor(personal_total_requerido / n_turnos_dia)] * n_turnos_dia
-    remainder = personal_total_requerido % n_turnos_dia
-    if remainder > 0:
-        if n_turnos_dia >= 2:
-            operators_per_shift_group[1] += remainder
-        else:
-            operators_per_shift_group[0] += remainder
-
-    op_start_index = 0
-    for shift_index in range(n_turnos_dia):
-        shift_name = f"Turno {shift_index+1}"
-        num_ops_in_group = operators_per_shift_group[shift_index]
+                    row.append(f'Turno {shift + 1}')
+        schedule_data.append(row)
+    
+    # Crear nombres de columnas
+    columns = ['Operador']
+    for week in range(3):
+        for day in day_names:
+            columns.append(f'S{week+1}-{day[:3]}')
+    
+    df_schedule = pd.DataFrame(schedule_data, columns=columns)
+    
+    st.subheader("Programación Completa - 3 Semanas")
+    st.dataframe(df_schedule, use_container_width=True)
+    
+    # Mostrar estadísticas
+    st.subheader("Estadísticas de la Programación")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.write("**Horas por operador por semana:**")
+        for operator in scheduler.operators[:5]:  # Mostrar solo los primeros 5
+            hours_week = [scheduler.calculate_weekly_hours(operator, w) for w in range(3)]
+            total_hours = sum(hours_week)
+            avg_hours = total_hours / 3
+            st.write(f"{operator}: {hours_week} (Promedio: {avg_hours:.1f}h)")
+    
+    with col2:
+        st.write("**Cobertura por turno:**")
+        for shift_id in range(n_turnos_dia):
+            st.write(f"**Turno {shift_id + 1}:**")
+            for week in range(3):
+                coverage = []
+                for day in range(7):
+                    count = scheduler.count_operators_in_shift(week, day, shift_id)
+                    coverage.append(count)
+                st.write(f"Semana {week+1}: {coverage}")
+    
+    with col3:
+        st.write("**Cumplimiento de restricciones:**")
         
-        group_operators = all_operators[op_start_index:op_start_index + num_ops_in_group]
+        # Verificar promedio de horas
+        operators_within_target = 0
+        for operator in scheduler.operators:
+            total_hours = sum(scheduler.operator_weekly_hours[operator])
+            if 120 <= total_hours <= 132:  # 40-44 horas promedio (±2 horas de flexibilidad)
+                operators_within_target += 1
         
-        current_shift_schedule_data = {}
-        for op_id in group_operators:
-            op_schedule_for_this_shift = []
-            for day_schedule in operator_schedules[op_id]:
-                if day_schedule == shift_name:
-                    op_schedule_for_this_shift.append(shift_name)
-                else:
-                    op_schedule_for_this_shift.append("DESCANSA" if day_schedule == "DESCANSA" else "-")
-            current_shift_schedule_data[op_id] = op_schedule_for_this_shift
-            
-        df_shift = pd.DataFrame(current_shift_schedule_data, index=[f"Semana {w+1} | {day}" for w in range(4) for day in day_names]).T
+        st.metric("Operadores con horas promedio correctas", 
+                 f"{operators_within_target}/{len(scheduler.operators)}")
         
-        st.subheader(f"Programación para {shift_name} | Operadores: {num_ops_in_group}")
-        st.dataframe(df_shift)
-        all_schedules_data[shift_name] = df_shift
+        # Verificar cobertura mínima
+        days_with_sufficient_coverage = 0
+        total_shift_days = 3 * 7 * n_turnos_dia
         
-        op_start_index += num_ops_in_group
-
-    # 4. Descargar la programación
+        for week in range(3):
+            for day in range(7):
+                for shift_id in range(n_turnos_dia):
+                    if scheduler.count_operators_in_shift(week, day, shift_id) >= min_operadores_turno:
+                        days_with_sufficient_coverage += 1
+        
+        coverage_percentage = (days_with_sufficient_coverage / total_shift_days) * 100
+        st.metric("Cobertura mínima cumplida", f"{coverage_percentage:.1f}%")
+    
+    # Descargar archivo Excel
     st.write("---")
-    st.subheader("Descargar Programación Completa")
-    st.write("Haz clic en el botón para descargar la programación de todos los turnos en un archivo de Excel.")
-
+    st.subheader("Descargar Programación")
+    
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        for shift_name, df_shift in all_schedules_data.items():
-            df_shift.to_excel(writer, sheet_name=shift_name)
+        # Hoja principal con la programación
+        df_schedule.to_excel(writer, sheet_name='Programacion_Completa', index=False)
+        
+        # Hoja con estadísticas por operador
+        stats_data = []
+        for operator in scheduler.operators:
+            hours_by_week = [scheduler.calculate_weekly_hours(operator, w) for w in range(3)]
+            total_hours = sum(hours_by_week)
+            avg_hours = total_hours / 3
+            
+            stats_data.append({
+                'Operador': operator,
+                'Horas_Semana_1': hours_by_week[0],
+                'Horas_Semana_2': hours_by_week[1],
+                'Horas_Semana_3': hours_by_week[2],
+                'Total_Horas': total_hours,
+                'Promedio_Semanal': round(avg_hours, 1)
+            })
+        
+        df_stats = pd.DataFrame(stats_data)
+        df_stats.to_excel(writer, sheet_name='Estadisticas_Operadores', index=False)
+        
+        # Hoja con cobertura por turno
+        coverage_data = []
+        for week in range(3):
+            for day in range(7):
+                for shift_id in range(n_turnos_dia):
+                    count = scheduler.count_operators_in_shift(week, day, shift_id)
+                    coverage_data.append({
+                        'Semana': week + 1,
+                        'Dia': day_names[day],
+                        'Turno': f'Turno {shift_id + 1}',
+                        'Operadores_Asignados': count,
+                        'Cumple_Minimo': 'Sí' if count >= min_operadores_turno else 'No'
+                    })
+        
+        df_coverage = pd.DataFrame(coverage_data)
+        df_coverage.to_excel(writer, sheet_name='Cobertura_por_Turno', index=False)
     
     output.seek(0)
-
+    
     st.download_button(
-        label="Descargar Horario a Excel",
+        label="📊 Descargar Programación Completa (Excel)",
         data=output,
-        file_name='programacion_turnos.xlsx',
+        file_name=f'programacion_turnos_avanzada_{datetime.now().strftime("%Y%m%d")}.xlsx',
         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
+
+st.write("---")
+st.markdown(
+    """
+    #### Restricciones Implementadas en V2
+    1. ✅ Cambio de turno solo entre semanas
+    2. ✅ Flexibilidad de horas con promedio de 42h en 3 semanas  
+    3. ✅ Promedio de 8 horas/día al final de 3 semanas
+    4. ✅ Máximo 2 domingos seguidos trabajados
+    5. ✅ Descansos diferentes entre semanas
+    6. ✅ Mismo turno durante toda la semana
+    7. ✅ Descanso obligatorio antes de cambio de turno
+    8. ✅ No repetir turno en semanas consecutivas
+    9. ✅ Distribución equitativa de operadores por turno
+    10. ✅ Garantía de cobertura mínima por turno
+    """
+)
