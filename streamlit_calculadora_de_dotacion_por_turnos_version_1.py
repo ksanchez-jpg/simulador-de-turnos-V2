@@ -200,52 +200,79 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
         shift_operators.append(shift_ops)
         operator_index += shift_size
     
-    # Programar cada operador
+    # Programar cada operador con rotación OBLIGATORIA de turnos
     for shift_idx, shift_ops in enumerate(shift_operators):
         for op_idx, operator in enumerate(shift_ops):
             # Seleccionar patrón de trabajo
             pattern_idx = op_idx % len(work_patterns)
             work_pattern = work_patterns[pattern_idx]
             
-            # Offset para distribuir descansos
-            rest_offset = op_idx % 7
-            
-            # Turno base del operador (rotará cada semana)
+            # Turno base del operador - DEBE cambiar cada semana
             base_shift = shift_idx
             
             for week in range(4):
                 week_start = week * 7
                 days_to_work = work_pattern[week]
                 
-                # El turno cambia cada semana, pero solo si descansó el día anterior
+                # TURNO OBLIGATORIO DIFERENTE CADA SEMANA
                 current_shift = (base_shift + week) % n_turnos_dia
                 shift_name = f"Turno {current_shift + 1}"
                 
-                # Si es cambio de turno (week > 0), verificar descanso previo
-                if week > 0:
-                    prev_day = week_start - 1
-                    if schedule_matrix[operator][prev_day] != "DESCANSA":
-                        # Forzar descanso en el primer día de la nueva semana
-                        schedule_matrix[operator][week_start] = "DESCANSA"
-                        days_to_work = max(0, days_to_work - 1)
-                        work_start = 1
-                    else:
-                        work_start = 0
-                else:
-                    work_start = 0
+                # Para rotación correcta: si cambia de turno, debe haber descanso
+                needs_rest_before_change = False
+                rest_day_position = -1
                 
-                # Asignar días de trabajo en la semana con offset para distribuir descansos
-                work_days_assigned = 0
-                for day_offset in range(7):
-                    if work_days_assigned >= days_to_work:
-                        break
-                    
-                    day_in_week = (day_offset + rest_offset) % 7
+                if week > 0:
+                    prev_shift = (base_shift + week - 1) % n_turnos_dia
+                    if prev_shift != current_shift:  # Cambia de turno
+                        # Verificar si trabajó el domingo anterior
+                        sunday_before = week_start - 1
+                        prev_shift_name = f"Turno {prev_shift + 1}"
+                        
+                        if schedule_matrix[operator][sunday_before] == prev_shift_name:
+                            # Trabajó el domingo, debe descansar el lunes
+                            needs_rest_before_change = True
+                            rest_day_position = 0  # Lunes
+                        else:
+                            # Ya descansó el domingo, puede trabajar desde el lunes
+                            needs_rest_before_change = False
+                
+                # Programar la semana
+                days_programmed = 0
+                
+                # Primero, manejar el descanso obligatorio por cambio de turno
+                if needs_rest_before_change:
+                    schedule_matrix[operator][week_start + rest_day_position] = "DESCANSA"
+                    days_to_work = min(days_to_work, 6)  # Máximo 6 días si descansa 1
+                
+                # Luego, programar los días de trabajo
+                work_days_count = 0
+                for day_in_week in range(7):
                     absolute_day = week_start + day_in_week
                     
-                    if day_in_week >= work_start and schedule_matrix[operator][absolute_day] == "DESCANSA":
-                        schedule_matrix[operator][absolute_day] = shift_name
-                        work_days_assigned += 1
+                    # Si es el día de descanso obligatorio, saltarlo
+                    if needs_rest_before_change and day_in_week == rest_day_position:
+                        continue
+                    
+                    # Si ya tenemos suficientes días de trabajo, el resto son descansos
+                    if work_days_count >= days_to_work:
+                        schedule_matrix[operator][absolute_day] = "DESCANSA"
+                    else:
+                        # Programar trabajo, pero distribuir algunos descansos
+                        # Usar un patrón para distribuir descansos de forma variada
+                        offset_pattern = (op_idx + week + day_in_week) % 7
+                        total_rest_needed = 7 - days_to_work - (1 if needs_rest_before_change else 0)
+                        
+                        if total_rest_needed > 0 and offset_pattern < total_rest_needed and work_days_count < days_to_work:
+                            # Este día será descanso para distribuir uniformemente
+                            schedule_matrix[operator][absolute_day] = "DESCANSA"
+                        else:
+                            # Este día trabajará
+                            if work_days_count < days_to_work:
+                                schedule_matrix[operator][absolute_day] = shift_name
+                                work_days_count += 1
+                            else:
+                                schedule_matrix[operator][absolute_day] = "DESCANSA"
     
     # Verificar cobertura mínima por turno y día, ajustar si es necesario
     day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
