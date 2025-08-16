@@ -163,7 +163,8 @@ st.write("---")
 st.header("3. Programación de Turnos (4 Semanas)")
 
 if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
-    
+
+    # --- 1. Preparar la lista de operadores ---
     all_operators = []
     for i in range(personas_actuales):
         all_operators.append(f"OP-{i+1}")
@@ -174,6 +175,7 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
         st.warning("No se puede generar la programación sin personal. Por favor, ajusta los valores de entrada.")
         st.stop()
     
+    # 2. Generar horarios para cada operador
     operator_schedules = {op_id: [""] * 28 for op_id in all_operators}
     
     work_days_patterns = weekly_days_pattern(horas_por_turno)
@@ -186,7 +188,6 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
         for week in range(4):
             days_to_work = work_days_patterns[week]
             
-            # Check rest day before shift change
             rest_before_change = False
             if week > 0:
                 prev_week_status = operator_schedules[op_id][(week-1)*7+6]
@@ -210,27 +211,38 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
 
     all_schedules_data = {}
 
+    # 3. Organizar los horarios por grupo de turno y verificar cobertura
+    operators_per_shift_group = [math.floor(personal_total_requerido / n_turnos_dia)] * n_turnos_dia
+    remainder = personal_total_requerido % n_turnos_dia
+    if remainder > 0:
+        if n_turnos_dia >= 2:
+            operators_per_shift_group[1] += remainder
+        else:
+            operators_per_shift_group[0] += remainder
+
+    op_start_index = 0
     for shift_index in range(n_turnos_dia):
         shift_name = f"Turno {shift_index+1}"
+        num_ops_in_group = operators_per_shift_group[shift_index]
         
-        current_shift_schedule = {}
-        for op_id, schedule in operator_schedules.items():
-            op_schedule_for_this_shift = []
-            for day_schedule in schedule:
-                if day_schedule == shift_name:
-                    op_schedule_for_this_shift.append(shift_name)
-                else:
-                    op_schedule_for_this_shift.append(day_schedule)
-            current_shift_schedule[op_id] = op_schedule_for_this_shift
-            
-        filtered_schedule = {op_id: days for op_id, days in current_shift_schedule.items() if any(day_status.startswith("Turno") for day_status in days)}
-
-        df_shift = pd.DataFrame(filtered_schedule, index=[f"Semana {w+1} | {day}" for w in range(4) for day in day_names]).T
+        # Get the subset of operators for this group
+        group_operators = all_operators[op_start_index:op_start_index + num_ops_in_group]
         
-        st.subheader(f"Programación para {shift_name} | Operadores: {len(filtered_schedule)}")
+        # Build the schedule for this group
+        current_shift_schedule_data = {}
+        for op_id in group_operators:
+            current_shift_schedule_data[op_id] = operator_schedules[op_id]
+        
+        df_shift = pd.DataFrame(current_shift_schedule_data, index=[f"Semana {w+1} | {day}" for w in range(4) for day in day_names]).T
+        
+        st.subheader(f"Programación para {shift_name} | Operadores: {num_ops_in_group}")
         st.dataframe(df_shift)
         all_schedules_data[shift_name] = df_shift
+        
+        # Update the start index for the next group
+        op_start_index += num_ops_in_group
 
+    # 4. Descargar la programación
     st.write("---")
     st.subheader("Descargar Programación Completa")
     st.write("Haz clic en el botón para descargar la programación de todos los turnos en un archivo de Excel.")
