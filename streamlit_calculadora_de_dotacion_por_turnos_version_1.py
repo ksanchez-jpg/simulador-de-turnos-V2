@@ -164,7 +164,6 @@ st.header("3. Programación de Turnos (4 Semanas)")
 
 if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
     
-    # 1. Preparar la lista de operadores
     all_operators = []
     for i in range(personas_actuales):
         all_operators.append(f"OP-{i+1}")
@@ -175,7 +174,6 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
         st.warning("No se puede generar la programación sin personal. Por favor, ajusta los valores de entrada.")
         st.stop()
     
-    # 2. Generar horarios para cada operador
     operator_schedules = {op_id: [""] * 28 for op_id in all_operators}
     
     work_days_patterns = weekly_days_pattern(horas_por_turno)
@@ -190,14 +188,14 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
             
             # Check rest day before shift change
             rest_before_change = False
-            if week > 0 and (op_schedules[op_id][(week-1)*7+6] != "DESCANSA" if (week-1)*7+6 < 28 else False):
-                rest_before_change = True
+            if week > 0:
+                prev_week_status = operator_schedules[op_id][(week-1)*7+6]
+                if prev_week_status != "DESCANSA":
+                    rest_before_change = True
 
-            # Assign shifts
             for day_idx in range(7):
                 global_day_index = week * 7 + day_idx
                 
-                # Check for rest before shift change
                 if rest_before_change and day_idx == 0:
                     operator_schedules[op_id][global_day_index] = "DESCANSA"
                     continue
@@ -209,10 +207,9 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
                     operator_schedules[op_id][global_day_index] = assigned_shift
                 else:
                     operator_schedules[op_id][global_day_index] = "DESCANSA"
-                    
-    # 3. Organizar los horarios por turno y verificar cobertura
+
     all_schedules_data = {}
-    
+
     for shift_index in range(n_turnos_dia):
         shift_name = f"Turno {shift_index+1}"
         
@@ -226,7 +223,7 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
                     op_schedule_for_this_shift.append(day_schedule)
             current_shift_schedule[op_id] = op_schedule_for_this_shift
             
-        filtered_schedule = {op_id: days for op_id, days in current_shift_schedule.items() if any(day_status == shift_name for day_status in days)}
+        filtered_schedule = {op_id: days for op_id, days in current_shift_schedule.items() if any(day_status.startswith("Turno") for day_status in days)}
 
         df_shift = pd.DataFrame(filtered_schedule, index=[f"Semana {w+1} | {day}" for w in range(4) for day in day_names]).T
         
@@ -234,7 +231,6 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
         st.dataframe(df_shift)
         all_schedules_data[shift_name] = df_shift
 
-    # 4. Descargar la programación
     st.write("---")
     st.subheader("Descargar Programación Completa")
     st.write("Haz clic en el botón para descargar la programación de todos los turnos en un archivo de Excel.")
