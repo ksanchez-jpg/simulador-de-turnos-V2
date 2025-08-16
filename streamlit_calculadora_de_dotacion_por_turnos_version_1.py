@@ -163,8 +163,8 @@ st.write("---")
 st.header("3. Programación de Turnos (4 Semanas)")
 
 if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
-
-    # --- 1. Preparar la lista de operadores ---
+    
+    # 1. Preparar la lista de operadores
     all_operators = []
     for i in range(personas_actuales):
         all_operators.append(f"OP-{i+1}")
@@ -188,23 +188,28 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
         for week in range(4):
             days_to_work = work_days_patterns[week]
             
+            # Check rest day before shift change
             rest_before_change = False
             if week > 0:
-                prev_week_status = operator_schedules[op_id][(week-1)*7+6]
-                if prev_week_status != "DESCANSA":
+                prev_week_last_day_status = operator_schedules[op_id][(week-1)*7+6]
+                if prev_week_last_day_status != "DESCANSA":
                     rest_before_change = True
 
+            # Assign shifts for the entire week
+            assigned_shift = f"Turno {((week + current_shift_rotation) % n_turnos_dia) + 1}"
+            
             for day_idx in range(7):
                 global_day_index = week * 7 + day_idx
                 
+                # Enforce rest on Monday after a work-filled Sunday
                 if rest_before_change and day_idx == 0:
                     operator_schedules[op_id][global_day_index] = "DESCANSA"
                     continue
                 
+                # Normal work/rest assignment
                 day_in_rotation = (day_idx + stagger_offset) % 7
                 
                 if day_in_rotation < days_to_work:
-                    assigned_shift = f"Turno {((week + current_shift_rotation) % n_turnos_dia) + 1}"
                     operator_schedules[op_id][global_day_index] = assigned_shift
                 else:
                     operator_schedules[op_id][global_day_index] = "DESCANSA"
@@ -225,21 +230,24 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
         shift_name = f"Turno {shift_index+1}"
         num_ops_in_group = operators_per_shift_group[shift_index]
         
-        # Get the subset of operators for this group
         group_operators = all_operators[op_start_index:op_start_index + num_ops_in_group]
         
-        # Build the schedule for this group
         current_shift_schedule_data = {}
         for op_id in group_operators:
-            current_shift_schedule_data[op_id] = operator_schedules[op_id]
-        
+            op_schedule_for_this_shift = []
+            for day_schedule in operator_schedules[op_id]:
+                if day_schedule == shift_name or day_schedule == "DESCANSA":
+                    op_schedule_for_this_shift.append(day_schedule)
+                else:
+                    op_schedule_for_this_shift.append("-")
+            current_shift_schedule_data[op_id] = op_schedule_for_this_shift
+            
         df_shift = pd.DataFrame(current_shift_schedule_data, index=[f"Semana {w+1} | {day}" for w in range(4) for day in day_names]).T
         
         st.subheader(f"Programación para {shift_name} | Operadores: {num_ops_in_group}")
         st.dataframe(df_shift)
         all_schedules_data[shift_name] = df_shift
         
-        # Update the start index for the next group
         op_start_index += num_ops_in_group
 
     # 4. Descargar la programación
