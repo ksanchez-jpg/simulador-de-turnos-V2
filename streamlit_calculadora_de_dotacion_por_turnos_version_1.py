@@ -1,5 +1,7 @@
 import streamlit as st
+import pandas as pd
 import math
+import json
 
 st.set_page_config(
     page_title="CÁLCULO DE PERSONAL REQUERIDO",
@@ -113,4 +115,29 @@ st.markdown(
     - Incluye ajuste por ausentismo y por vacaciones.
     - Próxima versión: calendario de 4 semanas con descansos y rotación de turnos.
     """
+)
+
+# ---- Descarga (JSON) ----
+payload = {
+    "cargo": cargo,
+    "%_ausentismo": ausentismo_pct,
+    "horas_prom_semana_trisem": horas_prom_trisem,
+    "personas_actuales": personas_actuales,
+    "dias_cubrir_semana": dias_cubrir,
+    "config_turnos": config_turnos,
+    "n_turnos_dia": n_turnos_dia,
+    "horas_por_turno": horas_por_turno,
+    "min_operadores_por_turno": min_operadores_turno,
+    "personal_vacaciones": personal_vacaciones,
+    "dias_vacaciones": dias_vacaciones,
+    "personal_requerido_base": round(personal_requerido_base, 2),
+    "personal_requerido_vacaciones": round(personal_requerido_vacaciones, 2),
+    "personal_total_requerido": personal_total_requerido,
+    "brecha_vs_actual": brecha,
+}
+st.download_button(
+    label="⬇️ Descargar resultados (JSON)",
+    data=json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
+    file_name="resultado_personal_v1.json",
+    mime="application/json",
 )
