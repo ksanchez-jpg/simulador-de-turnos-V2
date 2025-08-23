@@ -115,3 +115,32 @@ st.markdown(
     - Incluye ajuste por ausentismo y por vacaciones.
     """
 )
+
+
+# ---- Programación de Turnos ---- parte a cambiar y modificar
+st.divider()
+st.header("📅 Programación de Turnos")
+
+if st.button("Programar Turnos"):
+    # Generar lista de operadores
+    operadores = [f"OP-{i+1}" for i in range(personal_total_requerido)]
+    total_operadores = len(operadores)
+
+    # Dividir equitativamente entre turnos
+    operadores_por_turno = total_operadores // n_turnos_dia
+    extras = total_operadores % n_turnos_dia
+
+    grupos_turnos = []
+    idx = 0
+    for t in range(n_turnos_dia):
+        extra = 1 if t < extras else 0
+        grupo = operadores[idx:idx + operadores_por_turno + extra]
+        grupos_turnos.append(grupo)
+        idx += operadores_por_turno + extra
+
+    # Mostrar tablas
+    for turno_id, grupo in enumerate(grupos_turnos, start=1):
+        st.subheader(f"Turno {turno_id}")
+        df = pd.DataFrame({"Operadores asignados": grupo})
+        st.dataframe(df, use_container_width=True)
+
