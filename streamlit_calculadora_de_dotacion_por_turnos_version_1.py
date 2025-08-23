@@ -135,9 +135,3 @@ payload = {
     "personal_total_requerido": personal_total_requerido,
     "brecha_vs_actual": brecha,
 }
-st.download_button(
-    label="⬇️ Descargar resultados (JSON)",
-    data=json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
-    file_name="resultado_personal_v1.json",
-    mime="application/json",
-)
