@@ -1,183 +1,80 @@
 import streamlit as st
 import pandas as pd
 import math
-import json
-import io
-from collections import deque
 
-st.set_page_config(page_title="CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS", page_icon="🧮", layout="centered")
-st.title("🧮 CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS")
-st.caption("Versión 1 – Cálculo mínimo de personal con base en horas requeridas, ausentismo y vacaciones. La rotación y descansos se añadirán en la V2.")
+# ===============================
+# 1. Cálculo de personal necesario
+# ===============================
+st.title("📊 Planificación de Personal y Turnos")
 
-# ---- Sidebar: explicación breve ----
-with st.sidebar:
-    st.header("¿Cómo funciona?")
-    st.write(
-        """
-        Ingresas los parámetros operativos y la app estima el **número mínimo de personas** necesarias para cubrir los turnos de la semana, **ajustado por ausentismo y vacaciones**.
-        
-        **Fórmula base semanal:**
-        `Horas requeridas = Días a cubrir × Nº turnos × Horas por turno × Mín. operadores por turno`
-        
-        `Personal requerido = Horas requeridas ajustadas / Horas promedio por trabajador`
-        
-        Ajuste por ausentismo: divisor `(1 - % ausentismo)`.  
-        Ajuste por vacaciones: horas adicionales en función de personas y días fuera.
-        """
-    )
-    st.info("En V2 generaremos un calendario de 4 semanas que cumpla las restricciones de descansos y rotación.")
+# Entradas de usuario
+st.sidebar.header("Parámetros de Producción")
+produccion_diaria = st.sidebar.number_input("Producción diaria (ton)", min_value=0, value=500)
+capacidad_operador = st.sidebar.number_input("Capacidad de corte por operador (ton/día)", min_value=1, value=50)
+dias_laborales = st.sidebar.number_input("Días laborales al mes", min_value=1, value=30)
 
-# ---- Entradas ----
-col1, col2 = st.columns(2)
-with col1:
-    cargo = st.text_input("Nombre del cargo", value="Operador")
-    ausentismo_pct = st.number_input("% de ausentismo", 0.0, 100.0, 8.0, step=0.5)
-    horas_prom_trisem = st.number_input("Horas por semana (promedio trisemanal)", 10.0, 60.0, 42.0, step=0.5)
-    personal_vacaciones = st.number_input("Personal de vacaciones", min_value=0, value=0, step=1)
+# Cálculo de operadores
+operadores_necesarios = math.ceil(produccion_diaria / capacidad_operador)
+total_operadores = operadores_necesarios
+st.metric("👷‍♂️ Operadores necesarios por día", operadores_necesarios)
 
-with col2:
-    personas_actuales = st.number_input("Total de personas actuales en el cargo", min_value=0, value=0, step=1)
-    dias_cubrir = st.number_input("Días a cubrir en la semana", 1, 7, 7, step=1)
-    config_turnos = st.selectbox(
-        "Configuración de turnos",
-        ("3 turnos de 8 horas", "2 turnos de 12 horas", "4 turnos de 6 horas"),
-    )
-    dias_vacaciones = st.number_input("Días de vacaciones", min_value=0, value=0, step=1)
+# ===============================
+# 2. Programación de turnos
+# ===============================
+st.header("🗓️ Programación de Turnos (4 Semanas)")
 
-min_operadores_turno = st.number_input("Cantidad mínima de operadores por turno", 1, value=3, step=1)
-
-# ---- Configuración de turnos ----
-if "3 turnos" in config_turnos:
-    n_turnos_dia, horas_por_turno = 3, 8
-elif "2 turnos" in config_turnos:
-    n_turnos_dia, horas_por_turno = 2, 12
+# Selección del esquema de turnos
+esquema = st.selectbox("Seleccione esquema de turnos", ["3x8h", "2x12h", "4x6h"])
+if esquema == "3x8h":
+    num_turnos = 3
+elif esquema == "2x12h":
+    num_turnos = 2
 else:
-    n_turnos_dia, horas_por_turno = 4, 6
+    num_turnos = 4
 
-# ---- Cálculos ----
-horas_semana_requeridas = dias_cubrir * n_turnos_dia * horas_por_turno * min_operadores_turno
-factor_disponibilidad = 1.0 - (ausentismo_pct / 100.0)
-if factor_disponibilidad <= 0:
-    st.error("El % de ausentismo no puede ser 100% o más.")
-    st.stop()
+# Distribución de operadores entre turnos
+operadores_por_turno = total_operadores // num_turnos
 
-horas_semana_ajustadas = horas_semana_requeridas / factor_disponibilidad
-
-# Personal base requerido
-personal_requerido_base = horas_semana_ajustadas / horas_prom_trisem
-
-# Ajuste por vacaciones
-horas_vacaciones = personal_vacaciones * dias_vacaciones * horas_por_turno
-personal_requerido_vacaciones = horas_vacaciones / horas_prom_trisem
-
-# Total personal requerido
-personal_total_requerido = math.ceil(personal_requerido_base + personal_requerido_vacaciones)
-
-brecha = personal_total_requerido - personas_actuales
-
-# ---- Resultados ----
-st.subheader("Resultados")
-met1, met2, met3 = st.columns(3)
-met1.metric("Horas/semana a cubrir", f"{horas_semana_requeridas:,.0f}")
-met2.metric("Personal adicional requerido (ajustado)", f"{personal_requerido_base + personal_requerido_vacaciones:,.2f}")
-met3.metric("Personal total necesario (redondeo)", f"{personal_total_requerido}")
-
-st.divider()
-
-c1, c2 = st.columns(2)
-with c1:
-    st.markdown("### Resumen de supuestos")
-    st.write(
-        f"**Cargo:** {cargo}\n\n"
-        f"**Esquema de turnos:** {config_turnos} (# turnos/día = {n_turnos_dia}, horas/turno = {horas_por_turno})\n\n"
-        f"**Días a cubrir/semana:** {dias_cubrir}\n\n"
-        f"**Mín. operadores por turno:** {min_operadores_turno}\n\n"
-        f"**% Ausentismo:** {ausentismo_pct:.1f}%\n\n"
-        f"**Horas promedio/semana por trabajador (trisemanal):** {horas_prom_trisem}\n\n"
-        f"**Personal de vacaciones:** {personal_vacaciones} personas, {dias_vacaciones} días"
-    )
-
-with c2:
-    st.markdown("### Comparación con dotación actual")
-    st.write(f"**Personas actuales:** {personas_actuales}")
-    if brecha > 0:
-        st.warning(f"⛑️ Faltan **{brecha}** personas para cumplir el requerimiento.")
-    elif brecha < 0:
-        st.success(f"✅ Tienes **{-brecha}** personas por encima del mínimo requerido.")
-    else:
-        st.info("⚖️ La dotación actual coincide exactamente con el mínimo requerido.")
-
-st.divider()
-st.markdown(
-    """
-    #### Notas
-    - Incluye ajuste por ausentismo y por vacaciones.
-    - La V2 generará calendario de 4 semanas con descansos y rotación de turnos.
-    """
+# Cantidad mínima de operadores por turno
+min_operadores_turno = st.number_input(
+    "Cantidad mínima de operadores por turno", min_value=1, value=2, step=1
 )
 
-# ---- Descarga (JSON) ----
-payload = {
-    "cargo": cargo,
-    "%_ausentismo": ausentismo_pct,
-    "horas_prom_semana_trisem": horas_prom_trisem,
-    "personas_actuales": personas_actuales,
-    "dias_cubrir_semana": dias_cubrir,
-    "config_turnos": config_turnos,
-    "n_turnos_dia": n_turnos_dia,
-    "horas_por_turno": horas_por_turno,
-    "min_operadores_por_turno": min_operadores_turno,
-    "personal_vacaciones": personal_vacaciones,
-    "dias_vacaciones": dias_vacaciones,
-    "personal_requerido_base": round(personal_requerido_base, 2),
-    "personal_requerido_vacaciones": round(personal_requerido_vacaciones, 2),
-    "personal_total_requerido": personal_total_requerido,
-    "brecha_vs_actual": brecha,
-}
-st.download_button(
-    label="⬇️ Descargar resultados (JSON)",
-    data=json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
-    file_name="resultado_personal_v1.json",
-    mime="application/json",
-)
-
-# ---
-# --- CAMBIO: Programación de turnos separada por cantidad de turnos ---
-# ---
-st.write("---")
-st.header("3. Programación de Turnos (4 Semanas)")
-
-if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
-    # Lista de todos los operadores necesarios
-    all_operators = [f"OP-{i+1}" for i in range(personal_total_requerido)]
-    total_operators = len(all_operators)
-
-    # Dividir operadores entre los turnos
-    operadores_por_turno = total_operators // n_turnos_dia
-    extras = total_operators % n_turnos_dia
-
-    grupos_turnos = []
-    idx = 0
-    for t in range(n_turnos_dia):
-        extra = 1 if t < extras else 0
-        grupo = all_operators[idx:idx + operadores_por_turno + extra]
-        grupos_turnos.append(grupo)
-        idx += operadores_por_turno + extra
-
-    # Generar programación simple para cada grupo de turno
+# Función para generar programación de un turno
+def generar_programacion(operadores, semanas=4, turno_id=1):
     dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-    for turno_id, operadores in enumerate(grupos_turnos, start=1):
-        data = {}
-        for semana in range(1, 5):
-            for dia in dias:
-                data[f"Semana {semana} | {dia}"] = []
-        for op in operadores:
-            for semana in range(1, 5):
-                for i, dia in enumerate(dias):
-                    if (i + semana + turno_id) % 6 == 0:
-                        data[f"Semana {semana} | {dia}"].append("DESCANSA")
-                    else:
-                        data[f"Semana {semana} | {dia}"].append(f"Turno {turno_id}")
-        df = pd.DataFrame(data, index=operadores)
-        st.subheader(f"📋 Programación Turno {turno_id}")
-        st.dataframe(df, use_container_width=True)
+    data = {}
+    for semana in range(1, semanas+1):
+        for dia in dias:
+            data[f"Semana {semana} | {dia}"] = []
+
+    # Programar operadores asegurando mínimo requerido
+    for semana in range(1, semanas+1):
+        for dia in dias:
+            activos = operadores[:min_operadores_turno]  # los que trabajan
+            descansan = operadores[min_operadores_turno:]  # el resto descansa
+
+            for op in operadores:
+                if op in activos:
+                    data[f"Semana {semana} | {dia}"].append(f"Turno {turno_id}")
+                else:
+                    data[f"Semana {semana} | {dia}"].append("DESCANSA")
+
+            # Rotación simple: mover lista para que no siempre trabajen los mismos
+            operadores = operadores[min_operadores_turno:] + operadores[:min_operadores_turno]
+
+    df = pd.DataFrame(data, index=operadores)
+    return df
+
+# Crear una tabla para cada turno
+for turno in range(1, num_turnos+1):
+    st.subheader(f"📋 Programación Turno {turno}")
+
+    # Asignar operadores a este turno
+    operadores_turno = [
+        f"OP-{i+1 + (turno-1)*operadores_por_turno}" 
+        for i in range(operadores_por_turno)
+    ]
+
+    df_turno = generar_programacion(operadores_turno, semanas=4, turno_id=turno)
+    st.dataframe(df_turno)
