@@ -118,7 +118,6 @@ st.markdown(
 
 
 # ---- Programación de Turnos ---- parte a cambiar y modificar
-# ---- Programación de Turnos ----
 st.divider()
 st.header("📅 Programación de Turnos (4 Semanas)")
 
@@ -128,26 +127,27 @@ if st.button("Programar Turnos"):
 
     dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
-    # Data structure calendario
-    calendario = {}
-
-    # Usamos cola para rotar operadores
     from collections import deque
     cola = deque(operadores)
 
     for semana in range(1, 5):
         data = {dia: [] for dia in dias}
+
         for dia in dias:
-            # Asignar exactamente min_operadores_turno para trabajar
-            trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
-            descansando = list(cola)  # Los demás descansan ese día
+            if len(cola) >= min_operadores_turno:
+                trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
+            else:
+                # Si no hay suficientes, volvemos a rotar la cola
+                cola = deque(operadores)
+                trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
+
+            descansando = [op for op in operadores if op not in trabajando]
 
             # Guardar asignaciones
             data[dia] = [f"{op} (TRABAJA)" for op in trabajando] + [f"{op} (DESCANSA)" for op in descansando]
 
-            # Rotar: los que trabajaron pasan al final de la cola
-            for op in trabajando:
-                cola.append(op)
+        # Al final de la semana los que trabajaron se van al final de la cola
+        cola.extend([op for op in operadores if op not in cola])
 
         # Crear dataframe semanal
         df = pd.DataFrame.from_dict(data, orient="index").transpose()
