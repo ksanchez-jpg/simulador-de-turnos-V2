@@ -118,48 +118,14 @@ st.markdown(
 
 
 # ---- Programación de Turnos ---- parte a cambiar y modificar
-# Selección de número de turnos
-num_turnos = st.number_input("Cantidad de turnos por día", min_value=1, max_value=3, value=3, step=1)
+# Lista de operadores
+operadores = [f"OP{i+1}" for i in range(personal_total_requerido)]
 
-# ---- Programación de Turnos ----
-st.divider()
-st.header("📅 Programación de Turnos (4 Semanas)")
+# Dividir operadores en grupos según número de turnos
+grupo_por_turno = {}
+tam_grupo = personal_total_requerido // num_turnos
 
-if st.button("Programar Turnos"):
-    operadores = [f"OP-{i+1}" for i in range(personal_total_requerido)]
-    total_operadores = len(operadores)
-
-    dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-
-    from collections import deque
-
-    # Aquí generamos la tabla por turno
-    for turno in range(1, num_turnos + 1):
-        calendario = {op: {} for op in operadores}  # filas = operadores
-
-        for semana in range(1, 5):  # 4 semanas
-            cola = deque(operadores)  # 🔹 reiniciamos la cola cada semana
-
-            for dia in dias:
-                col_name = f"{dia} - Semana {semana}"
-
-                # Asignar trabajadores para ese día
-                if len(cola) >= min_operadores_turno:
-                    trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
-                else:
-                    cola = deque([op for op in operadores if op not in trabajando])
-                    trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
-
-                # Marcar quién trabaja y quién descansa
-                for op in operadores:
-                    if op in trabajando:
-                        calendario[op][col_name] = f"Turno {turno}"
-                    else:
-                        calendario[op][col_name] = "Descansa"
-
-        # Convertir a DataFrame (filas = operadores)
-        df = pd.DataFrame.from_dict(calendario, orient="index")
-        df.index.name = "Operador"
-
-        st.subheader(f"🕐 Turno {turno}")
-        st.dataframe(df, use_container_width=True)
+for turno in range(1, num_turnos + 1):
+    inicio = (turno - 1) * tam_grupo
+    fin = turno * tam_grupo
+    grupo_por_turno[turno] = operadores[inicio:fin]
