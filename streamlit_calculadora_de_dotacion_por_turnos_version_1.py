@@ -135,7 +135,7 @@ if st.button("Programar Turnos"):
 
     # Aquí generamos la tabla por turno
     for turno in range(1, num_turnos + 1):
-        calendario = {}
+        calendario = {op: {} for op in operadores}  # filas = operadores
 
         for semana in range(1, 5):  # 4 semanas
             cola = deque(operadores)  # 🔹 reiniciamos la cola cada semana
@@ -147,16 +147,19 @@ if st.button("Programar Turnos"):
                 if len(cola) >= min_operadores_turno:
                     trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
                 else:
-                    # Si ya no quedan suficientes en la cola, volver a llenarla con los que no trabajaron aún
                     cola = deque([op for op in operadores if op not in trabajando])
                     trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
 
-                descansando = [op for op in operadores if op not in trabajando]
+                # Marcar quién trabaja y quién descansa
+                for op in operadores:
+                    if op in trabajando:
+                        calendario[op][col_name] = f"Turno {turno}"
+                    else:
+                        calendario[op][col_name] = "Descansa"
 
-                calendario[col_name] = [f"{op} (TRABAJA)" for op in trabajando] + \
-                                       [f"{op} (DESCANSA)" for op in descansando]
+        # Convertir a DataFrame (filas = operadores)
+        df = pd.DataFrame.from_dict(calendario, orient="index")
+        df.index.name = "Operador"
 
-        # Convertir a tabla horizontal
-        df = pd.DataFrame.from_dict(calendario, orient="index").transpose()
         st.subheader(f"🕐 Turno {turno}")
         st.dataframe(df, use_container_width=True)
