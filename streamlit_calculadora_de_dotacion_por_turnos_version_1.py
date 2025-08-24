@@ -131,7 +131,7 @@ num_turnos = st.number_input("Número de turnos", min_value=1, value=3)
 min_operadores_turno = st.number_input("Cantidad mínima de operadores por turno", min_value=1, value=4)
 
 # ============================
-# División de operadores por turno
+# División de operadores por turno (semana 1)
 # ============================
 operadores = [f"OP{i+1}" for i in range(personal_total_requerido)]
 grupo_por_turno = {}
@@ -144,38 +144,41 @@ if num_turnos > 0:  # evitar división por cero
         grupo_por_turno[turno] = operadores[inicio:fin]
 
 # ============================
-# Programación de turnos para un mes
+# Programación de turnos con rotación semanal
 # ============================
-st.subheader("Programación mensual de turnos")
+st.subheader("📅 Programación mensual de turnos (con rotación)")
 
 dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 num_semanas = 4  # asumimos 1 mes = 4 semanas
 
-for turno, operadores_turno in grupo_por_turno.items():
-    st.write(f"### Turno {turno}")
-    
-    # Crear dataframe de programación
-    programacion = pd.DataFrame(index=operadores_turno)
-    
-    total_op = len(operadores_turno)
-    extra = total_op - min_operadores_turno if total_op > min_operadores_turno else 0
-    
-    for semana in range(1, num_semanas + 1):
+programacion_total = pd.DataFrame(index=operadores)
+
+for semana in range(num_semanas):
+    for turno, operadores_turno in grupo_por_turno.items():
+        # Calcular turno rotado para esta semana
+        turno_rotado = ((turno - 1 + semana) % num_turnos) + 1
+        total_op = len(operadores_turno)
+        extra = total_op - min_operadores_turno if total_op > min_operadores_turno else 0
+
         for dia in dias_semana:
-            col = f"{dia} - Semana {semana}"
-            asignaciones = []
-            
+            col = f"{dia} - Semana {semana+1}"
+            asignaciones = programacion_total[col].copy() if col in programacion_total else pd.Series([""] * len(operadores), index=operadores)
+
             if extra > 0:
                 # Rotar descansos entre operadores
                 for i, op in enumerate(operadores_turno):
-                    if (i + semana + len(programacion.columns)) % total_op < min_operadores_turno:
-                        asignaciones.append(f"Turno {turno}")
+                    if (i + semana + len(programacion_total.columns)) % total_op < min_operadores_turno:
+                        asignaciones[op] = f"Turno {turno_rotado}"
                     else:
-                        asignaciones.append("Descansa")
+                        asignaciones[op] = "Descansa"
             else:
-                # Todos trabajan porque el grupo tiene exactamente el número requerido
-                asignaciones = [f"Turno {turno}"] * total_op
-            
-            programacion[col] = asignaciones
-    
-    st.dataframe(programacion)
+                # Todos trabajan
+                for op in operadores_turno:
+                    asignaciones[op] = f"Turno {turno_rotado}"
+
+            programacion_total[col] = asignaciones
+
+# ============================
+# Mostrar tabla final
+# ============================
+st.dataframe(programacion_total)
