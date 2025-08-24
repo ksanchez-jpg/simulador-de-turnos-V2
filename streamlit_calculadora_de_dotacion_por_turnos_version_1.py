@@ -118,6 +118,10 @@ st.markdown(
 
 
 # ---- Programación de Turnos ---- parte a cambiar y modificar
+# Selección de número de turnos
+num_turnos = st.number_input("Cantidad de turnos por día", min_value=1, max_value=3, value=3, step=1)
+
+# ---- Programación de Turnos ----
 st.divider()
 st.header("📅 Programación de Turnos (4 Semanas)")
 
@@ -128,31 +132,31 @@ if st.button("Programar Turnos"):
     dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
     from collections import deque
-    cola = deque(operadores)
 
     # Aquí generamos la tabla por turno
     for turno in range(1, num_turnos + 1):
         calendario = {}
 
         for semana in range(1, 5):  # 4 semanas
+            cola = deque(operadores)  # 🔹 reiniciamos la cola cada semana
+
             for dia in dias:
                 col_name = f"{dia} - Semana {semana}"
 
-                # Sacamos los operadores para este día de la semana
+                # Asignar trabajadores para ese día
                 if len(cola) >= min_operadores_turno:
                     trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
                 else:
-                    # Si se acaba la cola, se reinicia
-                    cola = deque(operadores)
+                    # Si ya no quedan suficientes en la cola, volver a llenarla con los que no trabajaron aún
+                    cola = deque([op for op in operadores if op not in trabajando])
                     trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
 
                 descansando = [op for op in operadores if op not in trabajando]
 
-                # Guardar en la tabla
                 calendario[col_name] = [f"{op} (TRABAJA)" for op in trabajando] + \
                                        [f"{op} (DESCANSA)" for op in descansando]
 
-        # Crear DataFrame final horizontal para este turno
+        # Convertir a tabla horizontal
         df = pd.DataFrame.from_dict(calendario, orient="index").transpose()
         st.subheader(f"🕐 Turno {turno}")
         st.dataframe(df, use_container_width=True)
