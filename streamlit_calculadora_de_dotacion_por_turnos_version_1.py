@@ -118,7 +118,34 @@ st.markdown(
 
 
 # ---- Programación de Turnos ---- parte a cambiar y modificar
-# ---- Programación de turnos para un mes ----
+import streamlit as st
+import pandas as pd
+
+# ============================
+# Entradas del usuario
+# ============================
+st.title("Simulador de Programación de Turnos")
+
+personal_total_requerido = st.number_input("Número total de operadores requeridos", min_value=1, value=12)
+num_turnos = st.number_input("Número de turnos", min_value=1, value=3)
+min_operadores_turno = st.number_input("Cantidad mínima de operadores por turno", min_value=1, value=4)
+
+# ============================
+# División de operadores por turno
+# ============================
+operadores = [f"OP{i+1}" for i in range(personal_total_requerido)]
+grupo_por_turno = {}
+
+if num_turnos > 0:  # evitar división por cero
+    tam_grupo = personal_total_requerido // num_turnos
+    for turno in range(1, num_turnos + 1):
+        inicio = (turno - 1) * tam_grupo
+        fin = turno * tam_grupo
+        grupo_por_turno[turno] = operadores[inicio:fin]
+
+# ============================
+# Programación de turnos para un mes
+# ============================
 st.subheader("Programación mensual de turnos")
 
 dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
@@ -130,19 +157,25 @@ for turno, operadores_turno in grupo_por_turno.items():
     # Crear dataframe de programación
     programacion = pd.DataFrame(index=operadores_turno)
     
+    total_op = len(operadores_turno)
+    extra = total_op - min_operadores_turno if total_op > min_operadores_turno else 0
+    
     for semana in range(1, num_semanas + 1):
         for dia in dias_semana:
             col = f"{dia} - Semana {semana}"
-            # Asignamos operadores al turno de ese día
-            # Los que no quepan ese día se marcan como descanso
-            trabajadores_dia = operadores_turno.copy()
+            asignaciones = []
             
-            # si hay más operadores que los requeridos por turno → unos descansan
-            requeridos_por_turno = len(operadores_turno)
-            asignados = trabajadores_dia[:requeridos_por_turno]
-            descansan = trabajadores_dia[requeridos_por_turno:]
+            if extra > 0:
+                # Rotar descansos entre operadores
+                for i, op in enumerate(operadores_turno):
+                    if (i + semana + len(programacion.columns)) % total_op < min_operadores_turno:
+                        asignaciones.append(f"Turno {turno}")
+                    else:
+                        asignaciones.append("Descansa")
+            else:
+                # Todos trabajan porque el grupo tiene exactamente el número requerido
+                asignaciones = [f"Turno {turno}"] * total_op
             
-            programacion[col] = "Descansa"
-            programacion.loc[asignados, col] = f"Turno {turno}"
+            programacion[col] = asignaciones
     
     st.dataframe(programacion)
