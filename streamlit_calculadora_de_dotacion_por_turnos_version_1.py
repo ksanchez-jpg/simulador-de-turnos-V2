@@ -130,26 +130,29 @@ if st.button("Programar Turnos"):
     from collections import deque
     cola = deque(operadores)
 
-    for semana in range(1, 5):
-        data = {dia: [] for dia in dias}
+    # Aquí generamos la tabla por turno
+    for turno in range(1, num_turnos + 1):
+        calendario = {}
 
-        for dia in dias:
-            if len(cola) >= min_operadores_turno:
-                trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
-            else:
-                # Si no hay suficientes, volvemos a rotar la cola
-                cola = deque(operadores)
-                trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
+        for semana in range(1, 5):  # 4 semanas
+            for dia in dias:
+                col_name = f"{dia} - Semana {semana}"
 
-            descansando = [op for op in operadores if op not in trabajando]
+                # Sacamos los operadores para este día de la semana
+                if len(cola) >= min_operadores_turno:
+                    trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
+                else:
+                    # Si se acaba la cola, se reinicia
+                    cola = deque(operadores)
+                    trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
 
-            # Guardar asignaciones
-            data[dia] = [f"{op} (TRABAJA)" for op in trabajando] + [f"{op} (DESCANSA)" for op in descansando]
+                descansando = [op for op in operadores if op not in trabajando]
 
-        # Al final de la semana los que trabajaron se van al final de la cola
-        cola.extend([op for op in operadores if op not in cola])
+                # Guardar en la tabla
+                calendario[col_name] = [f"{op} (TRABAJA)" for op in trabajando] + \
+                                       [f"{op} (DESCANSA)" for op in descansando]
 
-        # Crear dataframe semanal
-        df = pd.DataFrame.from_dict(data, orient="index").transpose()
-        st.subheader(f"📅 Semana {semana}")
+        # Crear DataFrame final horizontal para este turno
+        df = pd.DataFrame.from_dict(calendario, orient="index").transpose()
+        st.subheader(f"🕐 Turno {turno}")
         st.dataframe(df, use_container_width=True)
