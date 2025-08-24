@@ -118,29 +118,38 @@ st.markdown(
 
 
 # ---- Programación de Turnos ---- parte a cambiar y modificar
+# ---- Programación de Turnos ----
 st.divider()
-st.header("📅 Programación de Turnos")
+st.header("📅 Programación de Turnos (4 Semanas)")
 
 if st.button("Programar Turnos"):
-    # Generar lista de operadores
     operadores = [f"OP-{i+1}" for i in range(personal_total_requerido)]
     total_operadores = len(operadores)
 
-    # Dividir equitativamente entre turnos
-    operadores_por_turno = total_operadores // n_turnos_dia
-    extras = total_operadores % n_turnos_dia
+    dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
-    grupos_turnos = []
-    idx = 0
-    for t in range(n_turnos_dia):
-        extra = 1 if t < extras else 0
-        grupo = operadores[idx:idx + operadores_por_turno + extra]
-        grupos_turnos.append(grupo)
-        idx += operadores_por_turno + extra
+    # Data structure calendario
+    calendario = {}
 
-    # Mostrar tablas
-    for turno_id, grupo in enumerate(grupos_turnos, start=1):
-        st.subheader(f"Turno {turno_id}")
-        df = pd.DataFrame({"Operadores asignados": grupo})
+    # Usamos cola para rotar operadores
+    from collections import deque
+    cola = deque(operadores)
+
+    for semana in range(1, 5):
+        data = {dia: [] for dia in dias}
+        for dia in dias:
+            # Asignar exactamente min_operadores_turno para trabajar
+            trabajando = [cola.popleft() for _ in range(min_operadores_turno)]
+            descansando = list(cola)  # Los demás descansan ese día
+
+            # Guardar asignaciones
+            data[dia] = [f"{op} (TRABAJA)" for op in trabajando] + [f"{op} (DESCANSA)" for op in descansando]
+
+            # Rotar: los que trabajaron pasan al final de la cola
+            for op in trabajando:
+                cola.append(op)
+
+        # Crear dataframe semanal
+        df = pd.DataFrame.from_dict(data, orient="index").transpose()
+        st.subheader(f"📅 Semana {semana}")
         st.dataframe(df, use_container_width=True)
-
