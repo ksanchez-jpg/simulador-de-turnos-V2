@@ -118,14 +118,31 @@ st.markdown(
 
 
 # ---- Programación de Turnos ---- parte a cambiar y modificar
-# Lista de operadores
-operadores = [f"OP{i+1}" for i in range(personal_total_requerido)]
+# ---- Programación de turnos para un mes ----
+st.subheader("Programación mensual de turnos")
 
-# Dividir operadores en grupos según número de turnos
-grupo_por_turno = {}
-tam_grupo = personal_total_requerido // num_turnos
+dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+num_semanas = 4  # asumimos 1 mes = 4 semanas
 
-for turno in range(1, num_turnos + 1):
-    inicio = (turno - 1) * tam_grupo
-    fin = turno * tam_grupo
-    grupo_por_turno[turno] = operadores[inicio:fin]
+for turno, operadores_turno in grupo_por_turno.items():
+    st.write(f"### Turno {turno}")
+    
+    # Crear dataframe de programación
+    programacion = pd.DataFrame(index=operadores_turno)
+    
+    for semana in range(1, num_semanas + 1):
+        for dia in dias_semana:
+            col = f"{dia} - Semana {semana}"
+            # Asignamos operadores al turno de ese día
+            # Los que no quepan ese día se marcan como descanso
+            trabajadores_dia = operadores_turno.copy()
+            
+            # si hay más operadores que los requeridos por turno → unos descansan
+            requeridos_por_turno = len(operadores_turno)
+            asignados = trabajadores_dia[:requeridos_por_turno]
+            descansan = trabajadores_dia[requeridos_por_turno:]
+            
+            programacion[col] = "Descansa"
+            programacion.loc[asignados, col] = f"Turno {turno}"
+    
+    st.dataframe(programacion)
