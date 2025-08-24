@@ -118,78 +118,144 @@ st.markdown(
 
 
 # ---- Programación de Turnos ---- parte a cambiar y modificar
+# ------------------------------
+# Programación con descanso antes del cambio de turno
+# ------------------------------
 import streamlit as st
 import pandas as pd
+import math
 
-# ============================
-# Entradas del usuario
-# ============================
-st.title("Simulador de Programación de Turnos")
+st.subheader("📅 Programación mensual de turnos (rotación + descanso antes del cambio)")
 
-personal_total_requerido = st.number_input("Número total de operadores requeridos", min_value=1, value=12)
-num_turnos = st.number_input("Número de turnos", min_value=1, value=3)
-min_operadores_turno = st.number_input("Cantidad mínima de operadores por turno", min_value=1, value=4)
+# seguridad mínima: deben haber como mínimo min_operadores_turno por turno simultáneamente
+if personal_total_requerido < num_turnos * min_operadores_turno:
+    st.error(
+        f"No hay suficiente personal para cubrir {num_turnos} turnos con {min_operadores_turno} operadores cada uno.\n"
+        f"Se requieren al menos {num_turnos * min_operadores_turno} operadores en total."
+    )
+else:
+    # === dividir operadores en grupos según turno inicial ===
+    operadores = [f"OP{i+1}" for i in range(personal_total_requerido)]
+    grupo_por_turno = {}
+    base = personal_total_requerido // num_turnos
+    resto = personal_total_requerido % num_turnos
+    inicio = 0
+    for t in range(1, num_turnos + 1):
+        tam = base + (1 if t <= resto else 0)
+        grupo_por_turno[t] = operadores[inicio: inicio + tam]
+        inicio += tam
 
-# ============================
-# División de operadores por turno (semana base)
-# ============================
-operadores = [f"OP{i+1}" for i in range(personal_total_requerido)]
-grupo_por_turno = {}
+    # parametrización calendario
+    dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    num_semanas = 4
 
-if num_turnos > 0:
-    tam_grupo = personal_total_requerido // num_turnos
-    for turno in range(1, num_turnos + 1):
-        inicio = (turno - 1) * tam_grupo
-        fin = turno * tam_grupo
-        grupo_por_turno[turno] = operadores[inicio:fin]
+    # Inicializar estructura de schedule: schedule[op][col] = "Turno X" / "Descansa"
+    cols = []
+    for sem in range(1, num_semanas + 1):
+        for d in dias_semana:
+            cols.append(f"{d} - Semana {sem}")
+    schedule = {op: {c: None for c in cols} for op in operadores}
 
-# ============================
-# Programación de turnos para un mes
-# ============================
-st.subheader("Programación mensual de turnos")
+    # Precompute turno de cada grupo por semana
+    # group_id is the initial turno number (1..num_turnos)
+    group_turno_week = {g: {} for g in grupo_por_turno.keys()}
+    for g in grupo_por_turno.keys():
+        for sem in range(1, num_semanas + 1):
+            group_turno_week[g][sem] = ((g - 1 + (sem - 1)) % num_turnos) + 1
 
-dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-num_semanas = 4  # asumimos 1 mes = 4 semanas
+    # 1) Relleno por defecto: todos del grupo trabajan todos los días de la semana con el turno rotado
+    for g, ops in grupo_por_turno.items():
+        for sem in range(1, num_semanas + 1):
+            turno_sem = group_turno_week[g][sem]
+            for d in dias_semana:
+                col = f"{d} - Semana {sem}"
+                for op in ops:
+                    schedule[op][col] = f"Turno {turno_sem}"
 
-# Generar tablas por cada turno
-for turno_inicial, operadores_turno in grupo_por_turno.items():
-    st.write(f"### Programación de grupo que inicia en Turno {turno_inicial}")
-    
-    programacion = pd.DataFrame(index=operadores_turno)
-    total_op = len(operadores_turno)
+    # 2) Aplicar regla de descanso en los límites semana -> semana+1:
+    #    para cada grupo, entre sem y sem+1 alternamos dentro del grupo
+    #    quien descansa domingo y quien descansa lunes (de modo que nadie trabaje domingo+y lunes)
+    for sem in range(1, num_semanas):  # boundary sem -> sem+1
+        for g, ops in grupo_por_turno.items():
+            # turno actual y siguiente (informativo)
+            turno_actual = group_turno_week[g][sem]
+            turno_siguiente = group_turno_week[g][sem + 1]
 
-    for semana in range(1, num_semanas + 1):
-        # Calcular turno que corresponde esa semana por rotación
-        turno_semana = ((turno_inicial - 1 + (semana - 1)) % num_turnos) + 1
+            # Si el turno cambia entre sem y sem+1 (normalmente cambia salvo num_turnos==1)
+            if turno_actual != turno_siguiente:
+                # patrón alternado: índices pares descansan domingo y empiezan lunes,
+                # impares trabajan domingo y descansan lunes (arrancan martes)
+                for i, op in enumerate(ops):
+                    dom_col = f"Domingo - Semana {sem}"
+                    lun_col = f"Lunes - Semana {sem + 1}"
 
-        for dia in dias_semana:
-            col = f"{dia} - Semana {semana}"
-            asignaciones = []
+                    if (i + sem) % 2 == 0:
+                        # descansa el domingo, puede trabajar el lunes (comienza el nuevo turno el lunes)
+                        schedule[op][dom_col] = "Descansa"
+                        schedule[op][lun_col] = f"Turno {turno_siguiente}"
+                    else:
+                        # trabaja el domingo (último día en turno anterior), descansa el lunes (día de recuperación),
+                        # comienza el nuevo turno el martes
+                        schedule[op][dom_col] = f"Turno {turno_actual}"
+                        schedule[op][lun_col] = "Descansa"
+                # nota: otros días de la semana ya estaban marcados como "Turno X" por el rellenado por defecto
 
-            for i, op in enumerate(operadores_turno):
-                asignacion = f"Turno {turno_semana}"
+    # 3) Reparar cobertura mínima (greedy): para cada día y cada turno asegurar >= min_operadores_turno
+    # construyo index para ver qué grupos están en qué turno ese día (usando group_turno_week)
+    # función auxiliar para contar y obtener candidatos
+    def count_workers_for_turn_day(week, day, turno_target):
+        col = f"{day} - Semana {week}"
+        workers = [op for op in operadores if schedule[op][col] == f"Turno {turno_target}"]
+        return workers
 
-                # Reglas de descanso en cambio de turno
-                if dia == "Domingo" and semana < num_semanas:
-                    # Mitad del grupo descansa el domingo antes del cambio
-                    if i >= min_operadores_turno:
-                        asignacion = "Descansa"
-                elif dia == "Lunes" and semana > 1:
-                    # Mitad del grupo que sí trabajó domingo descansa lunes
-                    if i < total_op - min_operadores_turno:
-                        asignacion = "Descansa"
+    # Revisión por cada semana/día/turno
+    for sem in range(1, num_semanas + 1):
+        for d in dias_semana:
+            col = f"{d} - Semana {sem}"
+            for turno_target in range(1, num_turnos + 1):
+                workers = count_workers_for_turn_day(sem, d, turno_target)
+                if len(workers) >= min_operadores_turno:
+                    continue  # ok
 
-                asignaciones.append(asignacion)
+                # necesitamos más operadores: buscamos candidatos en los grupos cuyo turno esa semana == turno_target
+                # candidatos deben estar "Descansa" en este col y no pueden haber trabajado el día anterior (para no violar la regla)
+                candidates = []
+                # compute previous day column (special for lunes)
+                if d == "Lunes":
+                    prev_col = f"Domingo - Semana {sem - 1}" if sem > 1 else None
+                else:
+                    # previous day in same week
+                    idx = dias_semana.index(d)
+                    prev_col = f"{dias_semana[idx - 1]} - Semana {sem}" if idx > 0 else None
 
-            # Asegurar que siempre hay al menos el mínimo de operadores trabajando
-            trabajando = sum(1 for a in asignaciones if a.startswith("Turno"))
-            if trabajando < min_operadores_turno:
-                # Si no alcanza, mover algunos descansos a trabajar
-                for j in range(len(asignaciones)):
-                    if asignaciones[j] == "Descansa" and trabajando < min_operadores_turno:
-                        asignaciones[j] = f"Turno {turno_semana}"
-                        trabajando += 1
+                # collect groups whose assigned turno this week is turno_target
+                groups_assigned = [g for g in grupo_por_turno.keys() if group_turno_week[g][sem] == turno_target]
+                for g in groups_assigned:
+                    for op in grupo_por_turno[g]:
+                        if schedule[op][col] == "Descansa":
+                            # ensure not working previous day (if prev_col exists)
+                            if prev_col is None or not schedule[op][prev_col].startswith("Turno"):
+                                candidates.append(op)
 
-            programacion[col] = asignaciones
+                # promote candidates until coverage satisfied
+                promoted = []
+                while len(workers) + len(promoted) < min_operadores_turno and candidates:
+                    op = candidates.pop(0)
+                    schedule[op][col] = f"Turno {turno_target}"
+                    promoted.append(op)
 
-    st.dataframe(programacion)
+                workers = count_workers_for_turn_day(sem, d, turno_target)
+                if len(workers) < min_operadores_turno:
+                    st.warning(
+                        f"No se pudo cubrir completamente Turno {turno_target} el {d} - Semana {sem} "
+                        f"respetando la regla 'descanso entre semanas'. Actualmente {len(workers)} / {min_operadores_turno}."
+                    )
+
+    # 4) Convertir a DataFrames y mostrar por grupo (tabla por turno-inicial)
+    for g, ops in grupo_por_turno.items():
+        st.write(f"### Grupo que inicia en Turno {g} (operadores: {len(ops)})")
+        df = pd.DataFrame({f"{d} - Semana {s}": [schedule[op][f'{d} - Semana {s}'] for op in ops]
+                           for s in range(1, num_semanas + 1) for d in dias_semana},
+                          index=ops)
+        df.index.name = "Operador"
+        st.dataframe(df, use_container_width=True)
