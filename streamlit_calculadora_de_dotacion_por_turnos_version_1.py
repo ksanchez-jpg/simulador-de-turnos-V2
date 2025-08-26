@@ -8,7 +8,7 @@ st.set_page_config(
     page_icon="🧮",
     layout="centered"
 )
-st.title("🧮 CÁLCULO DE PERSONAL REQUERIDO")
+st.title("� CÁLCULO DE PERSONAL REQUERIDO")
 st.caption("Versión 1 – Cálculo mínimo de personal con base en horas requeridas, ausentismo y vacaciones.")
 
 # ---- Sidebar: explicación breve ----
@@ -117,39 +117,32 @@ st.markdown(
 )
 
 
-# ---- Programación de Turnos ---- parte a cambiar y modificar
-import streamlit as st
-import pandas as pd
-
-# ---- Variables de entrada (ejemplo, se asumen del contexto de Streamlit) ----
-# personal_total_requerido = st.number_input("Personal total requerido", value=20)
-# n_turnos_dia = st.number_input("Número de turnos", value=2)
-# min_operadores_turno = st.number_input("Mínimo de operadores por turno", value=5)
-
-# Ejemplo de valores fijos para demostración
-personal_total_requerido = 20
-n_turnos_dia = 2
-min_operadores_turno = 5
-
+# ---- Programación de Turnos ----
 st.subheader("📋 Programación de turnos (bloques contiguos - cada operador en UNA sola tabla)")
 
-if personal_total_requerido <= 0:
+# Asignar los valores calculados de la primera parte del código
+personal_total_requerido_calc = personal_total_requerido
+n_turnos_dia_calc = n_turnos_dia
+min_operadores_turno_calc = min_operadores_turno
+
+if personal_total_requerido_calc <= 0:
     st.info("No hay personal requerido calculado para generar la programación.")
 else:
     # 1) Crear lista de operadores (op1..opN)
-    operadores = [f"op{i+1}" for i in range(personal_total_requerido)]
+    operadores = [f"op{i+1}" for i in range(personal_total_requerido_calc)]
 
     # 2) Número de turnos a dividir
-    k = n_turnos_dia
+    k = n_turnos_dia_calc
 
     # 3) Calcular tamaños por bloque (contiguos) y crear grupos
-    base = personal_total_requerido // k
-    resto = personal_total_requerido % k
-    tamaños = [base + (1 if i < resto else 0) for i in range(k)]
-
+    base = personal_total_requerido_calc // k
+    resto = personal_total_requerido_calc % k
+    
     grupos_turnos = []
     inicio = 0
-    for sz in tamaños:
+    for i in range(k):
+        # Determinar el tamaño del grupo actual, distribuyendo el resto de manera equitativa
+        sz = base + (1 if i < resto else 0)
         grupo = operadores[inicio: inicio + sz]
         grupos_turnos.append(grupo)
         inicio += sz
@@ -206,8 +199,8 @@ else:
         st.dataframe(df_turno, use_container_width=True)
 
     # 7) Validación rápida: avisar si algún turno quedó con menos operadores que el mínimo por turno
-    for idx, cnt in enumerate(tamaños):
-        if cnt < min_operadores_turno:
-            st.warning(f"Turno {idx+1} tiene {cnt} operadores, que es menor que 'min_operadores_turno' = {min_operadores_turno}.")
+    for idx, cnt in enumerate(grupos_turnos):
+        if len(cnt) < min_operadores_turno_calc:
+            st.warning(f"Turno {idx+1} tiene {len(cnt)} operadores, que es menor que 'min_operadores_turno' = {min_operadores_turno_calc}.")
 
-    st.success("Asignación por bloques aplicada. Cada operador aparece únicamente en su turno correspondiente.")
+�
