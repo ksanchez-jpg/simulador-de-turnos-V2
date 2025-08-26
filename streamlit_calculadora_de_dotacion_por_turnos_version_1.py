@@ -203,4 +203,3 @@ else:
         "- Patrón de trabajo/descanso por operador: 5 días ON / 2 días OFF, desfasado por operador para distribuir descansos.\n"
         "Si quieres otro patrón (por ejemplo 4x3, 6x2, o reglas más estrictas de rotación), dime y lo adapto."
     )
-
