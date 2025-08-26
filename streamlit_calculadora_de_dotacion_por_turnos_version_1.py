@@ -118,81 +118,35 @@ st.markdown(
 
 
 # ---- Programación de Turnos ---- parte a cambiar y modificar
-# ------------------------------
-import streamlit as st
-import pandas as pd
-import math
+# ---- Programación de turnos (debajo del cálculo actual) ----
+st.subheader("📅 Programación de turnos (4 semanas)")
 
-st.title("Simulador de Programación de Turnos")
+# Número total de operadores = personal_total_requerido (de la parte de arriba)
+operadores = [f"op{i+1}" for i in range(personal_total_requerido)]
 
-# ============================
-# Entradas del usuario
-# ============================
-personal_total_requerido = st.number_input("Número total de operadores requeridos", min_value=1, value=12)
-num_turnos = st.number_input("Número de turnos", min_value=1, value=3)
-min_operadores_turno = st.number_input("Cantidad mínima de operadores por turno", min_value=1, value=4)
-
-# ============================
-# División inicial de operadores por turno
-# ============================
-operadores = [f"OP{i+1}" for i in range(personal_total_requerido)]
-grupo_por_turno = {}
-tam_grupo = personal_total_requerido // num_turnos
-extras = personal_total_requerido % num_turnos
-inicio = 0
-
-for turno in range(1, num_turnos + 1):
-    fin = inicio + tam_grupo + (1 if extras > 0 else 0)
-    grupo_por_turno[turno] = operadores[inicio:fin]
-    inicio = fin
-    if extras > 0:
-        extras -= 1
-
-# ============================
-# Programación de turnos para un mes
-# ============================
-st.subheader("Programación mensual de turnos")
+# Configuración básica
+semanas = 4
 dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-num_semanas = 4  # 1 mes = 4 semanas
 
-# Función para determinar turno rotativo de la semana
-def turno_semanal(turno_inicial, semana, num_turnos):
-    return ((turno_inicial - 1 + semana - 1) % num_turnos) + 1
-
-for turno_inicial, operadores_turno in grupo_por_turno.items():
-    st.write(f"### Grupo inicial Turno {turno_inicial}")
-    
-    # Crear dataframe de programación
-    programacion = pd.DataFrame(index=operadores_turno)
-    
-    for semana in range(1, num_semanas + 1):
-        # Determinar el turno actual para este grupo
-        turno_actual = turno_semanal(turno_inicial, semana, num_turnos)
-        
-        for i, dia in enumerate(dias_semana):
-            col = f"{dia} - Semana {semana}"
+# Crear programación
+for turno in range(1, n_turnos_dia + 1):
+    data = {"Operador": operadores}
+    # Generar columnas de días
+    for semana in range(1, semanas + 1):
+        for dia in dias_semana:
+            col_name = f"{dia} semana {semana}"
             asignaciones = []
-            
-            for op in operadores_turno:
-                # Descanso obligatorio un día antes de cambiar de turno
-                if semana > 1 and dia == "Lunes":
-                    turno_prev = turno_semanal(turno_inicial, semana-1, num_turnos)
-                    if turno_prev != turno_actual:
-                        asignaciones.append("Descansa")
-                        continue
-                
-                # Si hay más operadores que el mínimo, rotar descansos para mantener cobertura
-                num_ops = len(operadores_turno)
-                for_idx = operadores_turno.index(op)
-                if num_ops > min_operadores_turno:
-                    if (for_idx + i) % num_ops < min_operadores_turno:
-                        asignaciones.append(f"Turno {turno_actual}")
-                    else:
-                        asignaciones.append("Descansa")
+            for i, op in enumerate(operadores):
+                # Lógica simple: asignar turno de manera rotativa
+                if (i + semana + dias_semana.index(dia)) % n_turnos_dia == (turno - 1):
+                    asignaciones.append(f"Turno {turno}")
                 else:
-                    asignaciones.append(f"Turno {turno_actual}")
-            
-            programacion[col] = asignaciones
+                    asignaciones.append("Descansa")
+            data[col_name] = asignaciones
     
-    st.dataframe(programacion, use_container_width=True)
-
+    # Crear DataFrame
+    df_turno = pd.DataFrame(data)
+    
+    # Mostrar tabla en Streamlit
+    st.markdown(f"### Turno {turno}")
+    st.dataframe(df_turno, use_container_width=True)
