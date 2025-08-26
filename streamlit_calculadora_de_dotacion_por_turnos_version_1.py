@@ -118,59 +118,59 @@ st.markdown(
 
 
 # ---- Programación de Turnos ---- parte a cambiar y modificar
-# ---- Programación de turnos corregida: 1 turno por día y división equitativa (round-robin) ----
-st.subheader("📋 Programación de turnos (restricción: 1 turno por día)")
+# ---- Programación de turnos con división por bloques ----
+st.subheader("📋 Programación de turnos (bloques contiguos, sin repetir operadores)")
 
 if personal_total_requerido <= 0:
     st.info("No hay personal requerido calculado para generar la programación.")
 else:
-    # Lista global de operadores
+    # Lista de operadores calculados
     operadores = [f"op{i+1}" for i in range(personal_total_requerido)]
 
     # Número de turnos a dividir
     k = n_turnos_dia
 
-    # Distribución round-robin: garantiza que cada operador quede en UN solo turno
-    grupos_turnos = [[] for _ in range(k)]
-    for idx, op in enumerate(operadores):
-        grupos_turnos[idx % k].append(op)
-
-    # Mostrar resumen de la división (número de operadores por turno y listado)
-    resumen_counts = {f"Turno {t+1}": len(grupos_turnos[t]) for t in range(k)}
-    st.write("**Distribución equitativa de operadores por turno (round-robin):**")
-    st.write(resumen_counts)
-    # opcional mostrar detalle
+    # División equitativa en BLOQUES (no se repiten operadores entre turnos)
+    base = personal_total_requerido // k
+    resto = personal_total_requerido % k
+    grupos_turnos = []
+    start = 0
     for t in range(k):
-        st.write(f"Turno {t+1}: {grupos_turnos[t]}")
+        size = base + (1 if t < resto else 0)
+        grupo = operadores[start:start+size]
+        grupos_turnos.append(grupo)
+        start += size
 
-    # Parámetros para generar la matriz de 4 semanas
+    # Mostrar resumen de la división
+    resumen = {f"Turno {t+1}": len(grupos_turnos[t]) for t in range(k)}
+    st.write("**Distribución equitativa (bloques):**")
+    st.write(resumen)
+
+    # Parámetros para la programación
     semanas = 4
     dias_semana = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 
-    # Patrón de trabajo/descanso: 5 días ON / 2 días OFF (configurable)
-    patron_base = [1, 1, 1, 1, 1, 0, 0]  # 1 = trabaja, 0 = descansa
+    # Patrón simple de trabajo/descanso: 5 ON / 2 OFF
+    patron_base = [1, 1, 1, 1, 1, 0, 0]
 
-    # Generar una tabla independiente por cada turno (solo con sus operadores)
+    # Generar programación por turno
     for t in range(k):
         turno_num = t + 1
         ops = grupos_turnos[t]
 
-        st.markdown(f"### 🔹 Turno {turno_num} — Operadores asignados: {len(ops)}")
+        st.markdown(f"### 🔹 Turno {turno_num} — Operadores: {len(ops)}")
         if len(ops) == 0:
             st.warning(f"Turno {turno_num} no tiene operadores asignados.")
             continue
 
-        # Construir columnas: "Operador" + cada día de cada semana
         data = {"Operador": ops}
-        for semana in range(1, semanas + 1):
+        for semana in range(1, semanas+1):
             for dia in dias_semana:
                 col_name = f"{dia} semana {semana}"
                 asignaciones = []
-                # índice absoluto del día (0..27) para rotación
                 for i, op in enumerate(ops):
-                    # Desfase por operador para escalonar descansos
                     offset = i % len(patron_base)
-                    dia_index = ((semana - 1) * len(dias_semana) + dias_semana.index(dia))  # 0..27
+                    dia_index = ((semana-1) * len(dias_semana) + dias_semana.index(dia))
                     pos = (offset + dia_index) % len(patron_base)
                     if patron_base[pos] == 1:
                         asignaciones.append(f"Turno {turno_num}")
@@ -178,20 +178,12 @@ else:
                         asignaciones.append("Descansa")
                 data[col_name] = asignaciones
 
-        # Crear DataFrame y mostrar
         df_turno = pd.DataFrame(data)
-        # Asegurar que 'Operador' sea la primera columna
-        cols = df_turno.columns.tolist()
-        if cols[0] != "Operador":
-            cols.remove("Operador")
-            cols.insert(0, "Operador")
-            df_turno = df_turno[cols]
-
         st.dataframe(df_turno, use_container_width=True)
 
     st.info(
-        "Reglas aplicadas:\n"
-        "- Cada operador está asignado exclusivamente a un turno (aparece solo en la tabla de ese turno).\n"
-        "- La distribución se hizo con round-robin para evitar agrupaciones y asegurar equidad.\n"
-        "- Patrón de trabajo/descanso por operador: 5 días ON / 2 días OFF, desfasado por operador."
+        "✅ División en bloques aplicada:\n"
+        "- Cada operador pertenece a un solo turno.\n"
+        "- Los bloques son contiguos (ej: Turno 1 = op1..op10, Turno 2 = op11..op20, etc.).\n"
+        "- Patrón 5 días de trabajo / 2 de descanso, desfasado por operador."
     )
