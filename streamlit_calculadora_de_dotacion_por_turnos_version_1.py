@@ -118,45 +118,39 @@ st.markdown(
 
 
 # ---- Programación de Turnos ---- parte a cambiar y modificar
-# ---- Programación de turnos con restricción: 1 turno por día y división equitativa ----
+# ---- Programación de turnos corregida: 1 turno por día y división equitativa (round-robin) ----
 st.subheader("📋 Programación de turnos (restricción: 1 turno por día)")
 
-# Si no hay personal requerido, evitamos generar tablas
 if personal_total_requerido <= 0:
     st.info("No hay personal requerido calculado para generar la programación.")
 else:
     # Lista global de operadores
     operadores = [f"op{i+1}" for i in range(personal_total_requerido)]
 
-    # Distribuir operadores equitativamente entre los turnos
-    total = personal_total_requerido
-    k = n_turnos_dia  # número de turnos a dividir
-    base = total // k
-    rem = total % k
+    # Número de turnos a dividir
+    k = n_turnos_dia
 
-    grupos_turnos = []
-    start = 0
+    # Distribución round-robin: garantiza que cada operador quede en UN solo turno
+    grupos_turnos = [[] for _ in range(k)]
+    for idx, op in enumerate(operadores):
+        grupos_turnos[idx % k].append(op)
+
+    # Mostrar resumen de la división (número de operadores por turno y listado)
+    resumen_counts = {f"Turno {t+1}": len(grupos_turnos[t]) for t in range(k)}
+    st.write("**Distribución equitativa de operadores por turno (round-robin):**")
+    st.write(resumen_counts)
+    # opcional mostrar detalle
     for t in range(k):
-        # los primeros 'rem' turnos reciben +1 operador
-        size = base + (1 if t < rem else 0)
-        grupo = operadores[start:start + size]
-        grupos_turnos.append(grupo)
-        start += size
+        st.write(f"Turno {t+1}: {grupos_turnos[t]}")
 
-    # Mostrar resumen de la división
-    resumen = {f"Turno {t+1}": len(grupos_turnos[t]) for t in range(k)}
-    st.write("**Distribución equitativa de operadores por turno:**")
-    st.write(resumen)
-
-    # Parametros para generar la matriz de 4 semanas
+    # Parámetros para generar la matriz de 4 semanas
     semanas = 4
     dias_semana = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 
-    # Patrón de trabajo/descanso: 5 días ON / 2 días OFF (se repetirá por semanas)
-    # Se desfasa el inicio del patrón por operador para distribuir descansos.
+    # Patrón de trabajo/descanso: 5 días ON / 2 días OFF (configurable)
     patron_base = [1, 1, 1, 1, 1, 0, 0]  # 1 = trabaja, 0 = descansa
 
-    # Para cada turno, creamos una tabla donde aparecen SOLO los operadores asignados a ese turno
+    # Generar una tabla independiente por cada turno (solo con sus operadores)
     for t in range(k):
         turno_num = t + 1
         ops = grupos_turnos[t]
@@ -174,9 +168,8 @@ else:
                 asignaciones = []
                 # índice absoluto del día (0..27) para rotación
                 for i, op in enumerate(ops):
-                    # Desfase por operador para escalonar descansos (helps distribute)
+                    # Desfase por operador para escalonar descansos
                     offset = i % len(patron_base)
-                    # calcular posición en el patrón para este día absoluto
                     dia_index = ((semana - 1) * len(dias_semana) + dias_semana.index(dia))  # 0..27
                     pos = (offset + dia_index) % len(patron_base)
                     if patron_base[pos] == 1:
@@ -187,7 +180,7 @@ else:
 
         # Crear DataFrame y mostrar
         df_turno = pd.DataFrame(data)
-        # Aseguramos que la primera columna sea 'Operador'
+        # Asegurar que 'Operador' sea la primera columna
         cols = df_turno.columns.tolist()
         if cols[0] != "Operador":
             cols.remove("Operador")
@@ -199,7 +192,6 @@ else:
     st.info(
         "Reglas aplicadas:\n"
         "- Cada operador está asignado exclusivamente a un turno (aparece solo en la tabla de ese turno).\n"
-        "- La división entre turnos es lo más equitativa posible (se reparte el residuo entre los primeros turnos).\n"
-        "- Patrón de trabajo/descanso por operador: 5 días ON / 2 días OFF, desfasado por operador para distribuir descansos.\n"
-        "Si quieres otro patrón (por ejemplo 4x3, 6x2, o reglas más estrictas de rotación), dime y lo adapto."
+        "- La distribución se hizo con round-robin para evitar agrupaciones y asegurar equidad.\n"
+        "- Patrón de trabajo/descanso por operador: 5 días ON / 2 días OFF, desfasado por operador."
     )
