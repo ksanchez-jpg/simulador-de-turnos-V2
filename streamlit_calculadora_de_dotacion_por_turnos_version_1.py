@@ -118,8 +118,20 @@ st.markdown(
 
 
 # ---- Programación de Turnos ---- parte a cambiar y modificar
-# ---- Programación de turnos definitiva: bloques contiguos (cada operador en UNA sola tabla) ----
-st.subheader("📋 Programación de turnos (bloques contiguos - sin repeticiones)")
+import streamlit as st
+import pandas as pd
+
+# ---- Variables de entrada (ejemplo, se asumen del contexto de Streamlit) ----
+# personal_total_requerido = st.number_input("Personal total requerido", value=20)
+# n_turnos_dia = st.number_input("Número de turnos", value=2)
+# min_operadores_turno = st.number_input("Mínimo de operadores por turno", value=5)
+
+# Ejemplo de valores fijos para demostración
+personal_total_requerido = 20
+n_turnos_dia = 2
+min_operadores_turno = 5
+
+st.subheader("📋 Programación de turnos (bloques contiguos - cada operador en UNA sola tabla)")
 
 if personal_total_requerido <= 0:
     st.info("No hay personal requerido calculado para generar la programación.")
@@ -167,14 +179,20 @@ else:
         for i, op in enumerate(ops):
             # Cada fila es un dict: 'Operador' + columnas de días (4 semanas)
             fila = {"Operador": op}
-            offset = i % len_patron  # desfase para escalonar descansos entre operadores del mismo turno
+            # Se aplica el desfase para escalonar los descansos dentro de este grupo de operadores.
+            # El offset se basa en la posición del operador dentro de su grupo.
+            offset = i % len_patron 
 
             for semana in range(1, semanas + 1):
-                for dia in dias_semana:
-                    dia_index = ((semana - 1) * len(dias_semana) + dias_semana.index(dia))  # 0..27
-                    pos = (offset + dia_index) % len_patron
-                    fila[f"{dia} semana {semana}"] = f"Turno {turno_num}" if patron_base[pos] == 1 else "Descansa"
-
+                for dia_idx, dia in enumerate(dias_semana):
+                    # Calcula la posición en el patrón para el día actual y el desfase del operador
+                    pos = (offset + dia_idx) % len_patron
+                    
+                    # Genera el valor de la celda.
+                    # El valor es fijo ("Turno X") si trabaja, o "Descansa" si no.
+                    valor_celda = f"Turno {turno_num}" if patron_base[pos] == 1 else "Descansa"
+                    
+                    fila[f"{dia} semana {semana}"] = valor_celda
             filas.append(fila)
 
         df_turno = pd.DataFrame(filas)
