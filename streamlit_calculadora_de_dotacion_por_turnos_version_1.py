@@ -239,183 +239,126 @@ st.markdown(
 # ---- Programación de Turnos ---- parte a cambiar y modificar
 
 import streamlit as st
-
 import pandas as pd
+import math
 
+# Configuración de la página de Streamlit
+st.set_page_config(
+    page_title="Programación de Turnos",
+    page_icon="📋",
+    layout="centered"
+)
+st.title("📋 Programación de Turnos")
+st.caption("Herramienta para la asignación equitativa de personal en turnos rotativos.")
 
+# ---- Entradas de Parámetros ----
+st.subheader("Parámetros de Programación")
+col1, col2 = st.columns(2)
+with col1:
+    personal_total_requerido = st.number_input(
+        "Número total de operadores", 
+        min_value=1, 
+        value=66, 
+        step=1
+    )
+    n_turnos_dia = st.number_input(
+        "Cantidad de turnos por día", 
+        min_value=1, 
+        value=3, 
+        step=1
+    )
+with col2:
+    min_operadores_turno = st.number_input(
+        "Cantidad de operadores por turno (mínimo)", 
+        min_value=1, 
+        value=3, 
+        step=1
+    )
+    horas_prom_trisem = st.number_input(
+        "Horas promedio por operador (3 semanas)",
+        min_value=1,
+        value=42,
+        step=1
+    )
 
-# ---- Variables de entrada (ejemplo, se asumen del contexto de Streamlit) ----
+st.divider()
 
-# personal_total_requerido = st.number_input("Personal total requerido", value=20)
-
-# n_turnos_dia = st.number_input("Número de turnos", value=2)
-
-# min_operadores_turno = st.number_input("Mínimo de operadores por turno", value=5)
-
-
-
-# Ejemplo de valores fijos para demostración
-
-personal_total_requerido = 20
-
-n_turnos_dia = 2
-
-min_operadores_turno = 5
-
-
-
-st.subheader("📋 Programación de turnos (bloques contiguos - cada operador en UNA sola tabla)")
-
-
-
-if personal_total_requerido <= 0:
-
-    st.info("No hay personal requerido calculado para generar la programación.")
-
+# Validación para asegurar que se pueda dividir equitativamente
+if personal_total_requerido < n_turnos_dia:
+    st.error("El número de operadores debe ser mayor o igual a la cantidad de turnos.")
 else:
+    # ---- Lógica de Distribución y Programación ----
+
+    # 1) Crear lista de operadores (op1..opN)
+    operadores = [f"op{i+1}" for i in range(personal_total_requerido)]
+
+    # 2) Calcular el número de operadores por turno
+    base = personal_total_requerido // n_turnos_dia
+    resto = personal_total_requerido % n_turnos_dia
+    
+    grupos_turnos = []
+    inicio = 0
+    for i in range(n_turnos_dia):
+        # Determinar el tamaño del grupo actual, distribuyendo el resto equitativamente
+        sz = base + (1 if i < resto else 0)
+        grupo = operadores[inicio: inicio + sz]
+        grupos_turnos.append(grupo)
+        inicio += sz
+
+    st.subheader("Resumen de Distribución")
+    # 3) Mostrar resumen de la división
+    resumen = {f"Turno {i+1}": len(grupos_turnos[i]) for i in range(n_turnos_dia)}
+    st.write("**Distribución por bloques (contiguos):**", resumen)
+
+    st.divider()
+
+    # 4) Parámetros de la programación
+    semanas = 4
+    dias_semana = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+    # Patrón simple (configurable): 5 ON / 2 OFF
+    patron_base = [1, 1, 1, 1, 1, 0, 0]  # 1 = trabaja, 0 = descansa
+    len_patron = len(patron_base)
+
+    # 5) Generar una tabla por cada turno con SOLO sus operadores (fila por operador)
+    for t, ops in enumerate(grupos_turnos):
+        turno_num = t + 1
+        st.markdown(f"### 🔹 Turno {turno_num} — Operadores asignados: {len(ops)}")
+
+        if len(ops) == 0:
+            st.warning(f"Turno {turno_num} no tiene operadores asignados.")
+            continue
+
+        filas = []
+        for i, op in enumerate(ops):
+            # Cada fila es un diccionario: 'Operador' + columnas de días (4 semanas)
+            fila = {"Operador": op}
+            # Se aplica el desfase para escalonar los descansos dentro de este grupo de operadores.
+            offset = i % len_patron 
+
+            for semana in range(1, semanas + 1):
+                for dia_idx, dia in enumerate(dias_semana):
+                    # Calcula la posición en el patrón para el día actual y el desfase del operador
+                    pos = (offset + dia_idx) % len_patron
+                    
+                    # Genera el valor de la celda.
+                    valor_celda = f"Turno {turno_num}" if patron_base[pos] == 1 else "Descansa"
+                    
+                    fila[f"{dia} semana {semana}"] = valor_celda
+            filas.append(fila)
+
+        df_turno = pd.DataFrame(filas)
+        # Aseguramos que 'Operador' sea la primera columna
+        cols = df_turno.columns.tolist()
+        if cols[0] != "Operador":
+            cols.remove("Operador")
+            cols.insert(0, "Operador")
+            df_turno = df_turno[cols]
+
+        st.dataframe(df_turno, use_container_width=True)
+
+    # 6) Validación rápida: avisar si algún turno quedó con menos operadores que el mínimo por turno
+    for idx, cnt in enumerate(grupos_turnos):
+        if len(cnt) < min_operadores_turno:
+            st.warning(f"Turno {idx+1} tiene {len(cnt)} operadores, que es menor que el mínimo requerido de {min_operadores_turno}.")
 
-    # 1) Crear lista de operadores (op1..opN)
-
-    operadores = [f"op{i+1}" for i in range(personal_total_requerido)]
-
-
-
-    # 2) Número de turnos a dividir
-
-    k = n_turnos_dia
-
-
-
-    # 3) Calcular tamaños por bloque (contiguos) y crear grupos
-
-    base = personal_total_requerido // k
-
-    resto = personal_total_requerido % k
-
-    tamaños = [base + (1 if i < resto else 0) for i in range(k)]
-
-
-
-    grupos_turnos = []
-
-    inicio = 0
-
-    for sz in tamaños:
-
-        grupo = operadores[inicio: inicio + sz]
-
-        grupos_turnos.append(grupo)
-
-        inicio += sz
-
-
-
-    # 4) Mostrar resumen de la división
-
-    resumen = {f"Turno {i+1}": len(grupos_turnos[i]) for i in range(k)}
-
-    st.write("**Distribución por bloques (contiguos):**", resumen)
-
-
-
-    # 5) Parámetros de la programación
-
-    semanas = 4
-
-    dias_semana = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
-
-
-
-    # Patrón simple (configurable): 5 ON / 2 OFF
-
-    patron_base = [1, 1, 1, 1, 1, 0, 0]  # 1 = trabaja, 0 = descansa
-
-    len_patron = len(patron_base)
-
-
-
-    # 6) Generar una tabla por cada turno con SOLO sus operadores (fila por operador)
-
-    for t, ops in enumerate(grupos_turnos):
-
-        turno_num = t + 1
-
-        st.markdown(f"### 🔹 Turno {turno_num} — Operadores asignados: {len(ops)}")
-
-
-
-        if len(ops) == 0:
-
-            st.warning(f"Turno {turno_num} no tiene operadores asignados.")
-
-            continue
-
-
-
-        filas = []
-
-        for i, op in enumerate(ops):
-
-            # Cada fila es un dict: 'Operador' + columnas de días (4 semanas)
-
-            fila = {"Operador": op}
-
-            # Se aplica el desfase para escalonar los descansos dentro de este grupo de operadores.
-
-            # El offset se basa en la posición del operador dentro de su grupo.
-
-            offset = i % len_patron 
-
-
-
-            for semana in range(1, semanas + 1):
-
-                for dia_idx, dia in enumerate(dias_semana):
-
-                    # Calcula la posición en el patrón para el día actual y el desfase del operador
-
-                    pos = (offset + dia_idx) % len_patron
-
-                    
-
-                    # Genera el valor de la celda.
-
-                    # El valor es fijo ("Turno X") si trabaja, o "Descansa" si no.
-
-                    valor_celda = f"Turno {turno_num}" if patron_base[pos] == 1 else "Descansa"
-
-                    
-
-                    fila[f"{dia} semana {semana}"] = valor_celda
-
-            filas.append(fila)
-
-
-
-        df_turno = pd.DataFrame(filas)
-
-        # Aseguramos que 'Operador' sea la primera columna
-
-        cols = df_turno.columns.tolist()
-
-        if cols[0] != "Operador":
-
-            cols.remove("Operador")
-
-            cols.insert(0, "Operador")
-
-            df_turno = df_turno[cols]
-
-
-
-        st.dataframe(df_turno, use_container_width=True)
-
-
-
-    # 7) Validación rápida: avisar si algún turno quedó con menos operadores que el mínimo por turno
-
-    for idx, cnt in enumerate(tamaños):
-
-        if cnt < min_operadores_turno:
-
-            st.warning(f"Turno {idx+1} tiene {cnt} operadores, que es menor que 'min_operadores_turno' = {min_operadores_turno}.")
