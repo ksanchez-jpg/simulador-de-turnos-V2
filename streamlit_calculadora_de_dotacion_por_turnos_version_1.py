@@ -67,3 +67,71 @@ st.metric("Personal total necesario", f"{personal_total_requerido}")
 st.divider()
 
 # -------------------- PROGRAMACIÓN DE OPERADORES --------------------
+
+import itertools
+
+# -------------------- CALENDARIO 2 SEMANAS --------------------
+dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+dias_total = [f"{d} S1" for d in dias_semana] + [f"{d} S2" for d in dias_semana]
+
+# -------------------- GENERAR PROGRAMACIÓN --------------------
+def generar_programacion(operadores, config_turnos, min_operadores_turno):
+    n_operadores = len(operadores)
+    calendario = {op: ["Descanso"] * 14 for op in operadores}
+
+    # Definir cuotas de trabajo por operador
+    if "3 turnos" in config_turnos:  # 8h
+        cuotas = ["8h"] * 9 + ["12h"]
+    else:  # 12h
+        cuotas = ["12h"] * 7
+
+    # Repartir turnos de manera rotativa
+    asignaciones = list(itertools.cycle(cuotas))
+    idx = 0
+
+    for dia in range(14):
+        # asignar mínimo de operadores requeridos ese día
+        for _ in range(min_operadores_turno):
+            op = operadores[idx % n_operadores]
+            # buscar la próxima cuota disponible
+            while calendario[op][dia] != "Descanso":
+                idx += 1
+                op = operadores[idx % n_operadores]
+            calendario[op][dia] = asignaciones[idx % len(asignaciones)]
+            idx += 1
+
+    # Convertir a DataFrame
+    df = pd.DataFrame.from_dict(calendario, orient="index", columns=dias_total)
+    df.index.name = "Operador"
+    df.reset_index(inplace=True)
+
+    return df
+
+# -------------------- RESUMEN POR OPERADOR --------------------
+def resumen_operadores(df):
+    resumen = []
+    for _, row in df.iterrows():
+        nombre = row["Operador"]
+        valores = row.drop("Operador").values
+        total_8h = (valores == "8h").sum()
+        total_12h = (valores == "12h").sum()
+        total_desc = (valores == "Descanso").sum()
+        resumen.append({
+            "Operador": nombre,
+            "Turnos 8h": total_8h,
+            "Turnos 12h": total_12h,
+            "Descansos": total_desc
+        })
+    return pd.DataFrame(resumen)
+
+# -------------------- USO --------------------
+operadores = [f"Op{i+1}" for i in range(personal_total_requerido)]
+df_programacion = generar_programacion(operadores, config_turnos, min_operadores_turno)
+
+st.subheader("📅 Calendario de 2 semanas")
+st.dataframe(df_programacion, use_container_width=True)
+
+# Mostrar resumen
+st.subheader("📊 Resumen de turnos por operador")
+df_resumen = resumen_operadores(df_programacion)
+st.dataframe(df_resumen, use_container_width=True)
