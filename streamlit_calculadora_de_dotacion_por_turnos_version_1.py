@@ -65,5 +65,3 @@ st.subheader("Resultados")
 st.metric("Personal total necesario", f"{personal_total_requerido}")
 
 st.divider()
-
-# -------------------- PROGRAMACIÓN DE OPERADORES --------------------
