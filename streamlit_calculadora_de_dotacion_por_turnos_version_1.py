@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 st.title("🧮 CÁLCULO DE PERSONAL REQUERIDO")
-st.caption("Versión 1 – Cálculo mínimo de personal con base en horas requeridas, ausentismo y vacaciones.")
+st.caption("Versión 2 – Cálculo mínimo de personal con base en horas requeridas, ausentismo y vacaciones (promedio bisemanal).")
 
 # -------------------- SIDEBAR EXPLICACIÓN --------------------
 with st.sidebar:
@@ -35,7 +35,7 @@ col1, col2 = st.columns(2)
 with col1:
     cargo = st.text_input("Nombre del cargo", value="Operador")
     ausentismo_pct = st.number_input("% de ausentismo", 0.0, 100.0, 8.0, step=0.5)
-    horas_prom_trisem = st.number_input("Horas por semana (promedio trisemanal)", 10.0, 60.0, 42.0, step=0.5)
+    horas_prom_bisem = st.number_input("Horas por semana (promedio bisemanal)", 10.0, 60.0, 42.0, step=0.5)
     personal_vacaciones = st.number_input("Personal de vacaciones", min_value=0, value=0, step=1)
 
 with col2:
@@ -69,11 +69,11 @@ if factor_disponibilidad <= 0:
 horas_semana_ajustadas = horas_semana_requeridas / factor_disponibilidad
 
 # Personal base requerido
-personal_requerido_base = horas_semana_ajustadas / horas_prom_trisem
+personal_requerido_base = horas_semana_ajustadas / horas_prom_bisem
 
-# Ajuste por vacaciones
+# Ajuste por vacaciones (considerando días que estarán fuera)
 horas_vacaciones = personal_vacaciones * dias_vacaciones * horas_por_turno
-personal_requerido_vacaciones = horas_vacaciones / horas_prom_trisem
+personal_requerido_vacaciones = horas_vacaciones / horas_prom_bisem
 
 # Total personal requerido
 personal_total_requerido = math.ceil(personal_requerido_base + personal_requerido_vacaciones)
@@ -100,7 +100,7 @@ with c1:
         f"**Días a cubrir/semana:** {dias_cubrir}\n\n"
         f"**Mín. operadores por turno:** {min_operadores_turno}\n\n"
         f"**% Ausentismo:** {ausentismo_pct:.1f}%\n\n"
-        f"**Horas promedio/semana por trabajador (trisemanal):** {horas_prom_trisem}\n\n"
+        f"**Horas promedio/semana por trabajador (bimensual):** {horas_prom_bisem}\n\n"
         f"**Personal de vacaciones:** {personal_vacaciones} personas, {dias_vacaciones} días"
     )
 
@@ -118,4 +118,5 @@ with c2:
 st.divider()
 
 st.markdown("#### Notas")
-st.write("- Incluye ajuste por ausentismo y por vacaciones.")
+st.write("- Incluye ajuste por ausentismo y por vacaciones (considerando días fuera).") 
+
