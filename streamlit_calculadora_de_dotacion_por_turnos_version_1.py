@@ -43,7 +43,7 @@ with col2:
     dias_cubrir = st.number_input("Días a cubrir en la semana", 1, 7, 7, step=1)
     config_turnos = st.selectbox(
         "Configuración de turnos",
-        ("3 turnos de 8 horas", "2 turnos de 12 horas", "4 turnos de 6 horas"),
+        ("3 turnos de 8 horas", "2 turnos de 12 horas"),
     )
     dias_vacaciones = st.number_input("Días de vacaciones", min_value=0, value=0, step=1)
     min_operadores_turno = st.number_input("Cantidad mínima de operadores por turno", 1, value=3, step=1)
@@ -53,8 +53,6 @@ if "3 turnos" in config_turnos:
     n_turnos_dia, horas_por_turno = 3, 8
 elif "2 turnos" in config_turnos:
     n_turnos_dia, horas_por_turno = 2, 12
-else:
-    n_turnos_dia, horas_por_turno = 4, 6
 
 # -------------------- CÁLCULOS --------------------
 # Horas requeridas en la semana
@@ -119,4 +117,3 @@ st.divider()
 
 st.markdown("#### Notas")
 st.write("- Incluye ajuste por ausentismo y por vacaciones (considerando días fuera).") 
-
