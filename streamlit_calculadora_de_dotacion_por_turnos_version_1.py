@@ -1,4 +1,3 @@
-Tú dijiste:
 import streamlit as st
 import pandas as pd
 import math
@@ -14,6 +13,8 @@ st.title("🧮 CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS")
 st.caption("Versión 2 – Cálculo + programación de operadores por turno.")
 
 # -------------------- ENTRADAS --------------------
+st.header("🔹 Parámetros de entrada")
+
 col1, col2 = st.columns(2)
 
 with col1:
@@ -25,10 +26,7 @@ with col1:
 with col2:
     personas_actuales = st.number_input("Total de personas actuales en el cargo", min_value=0, value=0, step=1)
     dias_cubrir = st.number_input("Días a cubrir en la semana", 1, 7, 7, step=1)
-    config_turnos = st.selectbox(
-        "Configuración de turnos",
-        ("3 turnos de 8 horas", "2 turnos de 12 horas"),
-    )
+    config_turnos = st.selectbox("Configuración de turnos", ("3 turnos de 8 horas", "2 turnos de 12 horas"))
     dias_vacaciones = st.number_input("Días de vacaciones", min_value=0, value=0, step=1)
     min_operadores_turno = st.number_input("Cantidad mínima de operadores por turno", 1, value=3, step=1)
 
@@ -62,7 +60,10 @@ personal_total_requerido = math.ceil(personal_requerido_base + personal_requerid
 brecha = personal_total_requerido - personas_actuales
 
 # -------------------- RESULTADOS --------------------
-st.subheader("Resultados")
-st.metric("Personal total necesario", f"{personal_total_requerido}")
+st.header("📊 Resultados")
+
+col_res1, col_res2 = st.columns(2)
+col_res1.metric("Personal total necesario", f"{personal_total_requerido}")
+col_res2.metric("Brecha vs actuales", f"{brecha}")
 
 st.divider()
