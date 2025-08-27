@@ -112,10 +112,10 @@ def resumen_operadores(df):
     resumen = []
     for _, row in df.iterrows():
         nombre = row["Operador"]
-        valores = row.drop("Operador").values
-        total_8h = (valores == "8h").sum()
-        total_12h = (valores == "12h").sum()
-        total_desc = (valores == "Descanso").sum()
+        valores = list(row.drop("Operador").values)  # asegurar lista
+        total_8h = valores.count("8h")
+        total_12h = valores.count("12h")
+        total_desc = valores.count("Descanso")
         resumen.append({
             "Operador": nombre,
             "Turnos 8h": total_8h,
@@ -125,13 +125,17 @@ def resumen_operadores(df):
     return pd.DataFrame(resumen)
 
 # -------------------- USO --------------------
-operadores = [f"Op{i+1}" for i in range(personal_total_requerido)]
-df_programacion = generar_programacion(operadores, config_turnos, min_operadores_turno)
+if personal_total_requerido > 0:
+    operadores = [f"Op{i+1}" for i in range(personal_total_requerido)]
+    df_programacion = generar_programacion(operadores, config_turnos, min_operadores_turno)
 
-st.subheader("📅 Calendario de 2 semanas")
-st.dataframe(df_programacion, use_container_width=True)
+    st.subheader("📅 Calendario de 2 semanas")
+    st.dataframe(df_programacion, use_container_width=True)
 
-# Mostrar resumen
-st.subheader("📊 Resumen de turnos por operador")
-df_resumen = resumen_operadores(df_programacion)
-st.dataframe(df_resumen, use_container_width=True)
+    # Mostrar resumen
+    st.subheader("📊 Resumen de turnos por operador")
+    df_resumen = resumen_operadores(df_programacion)
+    st.dataframe(df_resumen, use_container_width=True)
+else:
+    st.info("⚠️ Ingresa parámetros para calcular el personal requerido.")
+
