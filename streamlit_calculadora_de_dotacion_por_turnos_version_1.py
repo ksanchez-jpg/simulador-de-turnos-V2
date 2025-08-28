@@ -29,7 +29,7 @@ cargo = st.text_input("Cargo del personal (ej: Operador de Máquina)", "Operador
 personal_actual = st.number_input("Cantidad de personal actual en el cargo", min_value=0, value=1)
 ausentismo_porcentaje = st.number_input("Porcentaje de ausentismo (%)", min_value=0.0, max_value=100.0, value=5.0)
 dias_a_cubrir = st.number_input("Días a cubrir por semana", min_value=1, max_value=7, value=7)
-horas_promedio_semanal = st.number_input("Horas promedio semanales por operador (últimas 2 semanas)", min_value=1, value=40)
+horas_promedio_semanal = st.number_input("Horas promedio semanales por operador (últimas 3 semanas)", min_value=1, value=40)
 personal_vacaciones = st.number_input("Personal de vacaciones en el período de programación", min_value=0, value=0)
 operadores_por_turno = st.number_input("Cantidad de operadores requeridos por turno", min_value=1, value=1)
 
