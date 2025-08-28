@@ -96,11 +96,8 @@ if st.button("Calcular Personal Necesario y Turnos"):
                     num_turnos_por_operador_total = math.floor(target_total_hours / horas_por_turno)
                     horas_totales_por_operador = num_turnos_por_operador_total * horas_por_turno
 
-                    # Límite de horas extras (2 horas por semana * 3 semanas)
-                    max_horas_con_overtime = horas_totales_por_operador + (2 * 3)
-
                     # Se informa al usuario sobre el ajuste de horas
-                    st.info(f"El objetivo de horas total por operador se ha ajustado a {horas_totales_por_operador} ({horas_totales_por_operador/3:.2f} promedio semanal) para un balance preciso con turnos de {horas_por_turno} horas. Se permitirá un máximo de 6 horas extras en las 3 semanas.")
+                    st.info(f"El objetivo de horas total por operador se ha ajustado a {horas_totales_por_operador} ({horas_totales_por_operador/3:.2f} promedio semanal) para un balance preciso con turnos de {horas_por_turno} horas.")
 
                     # Inicializar un diccionario para llevar el seguimiento de las horas trabajadas por operador
                     horas_trabajadas_por_operador = {op_idx: 0 for op_idx in range(personal_final_necesario)}
@@ -146,8 +143,7 @@ if st.button("Calcular Personal Necesario y Turnos"):
                             for j in range(num_empleados_este_turno):
                                 global_op_idx = start_index_global + j
                                 
-                                # Condición para el descanso: se detiene si ya se cumplió el máximo permitido
-                                if horas_trabajadas_por_operador.get(global_op_idx, 0) >= max_horas_con_overtime:
+                                if horas_trabajadas_por_operador.get(global_op_idx, 0) >= horas_totales_por_operador:
                                     dia_programacion.append("Descanso")
                                 else:
                                     if j in indices_descanso:
