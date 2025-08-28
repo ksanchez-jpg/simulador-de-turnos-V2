@@ -16,7 +16,7 @@ cargo = st.text_input("Cargo del personal (ej: Operador de Máquina)", "Operador
 personal_actual = st.number_input("Cantidad de personal actual en el cargo", min_value=0, value=1)
 ausentismo_porcentaje = st.number_input("Porcentaje de ausentismo (%)", min_value=0.0, max_value=100.0, value=5.0)
 dias_a_cubrir = st.number_input("Días a cubrir por semana", min_value=1, max_value=7, value=7)
-horas_promedio_semanal = st.number_input("Horas promedio semanales por operador (últimas 2 semanas)", min_value=1, value=48)
+horas_promedio_semanal = st.number_input("Horas promedio semanales por operador (últimas 2 semanas)", min_value=1, value=42)
 personal_vacaciones = st.number_input("Personal de vacaciones en el período de programación", min_value=0, value=0)
 operadores_por_turno = st.number_input("Cantidad de operadores requeridos por turno", min_value=1, value=1)
 
@@ -76,7 +76,7 @@ if st.button("Calcular Personal Necesario y Turnos"):
                     else:
                         st.success("¡El personal actual es el ideal para esta operación!")
                     
-                    # --- Programación de Turnos Sugerida con Descanso Rotativo ---
+                    # --- Programación de Turnos Sugerida con Descanso Rotativo y Balance de Horas ---
                     st.header("Programación de Turnos Sugerida (basada en el personal requerido)")
                     
                     turnos_horarios = []
@@ -107,22 +107,22 @@ if st.button("Calcular Personal Necesario y Turnos"):
                         df_turno = pd.DataFrame(data)
                         
                         # Llenar las columnas de los días con la rotación de turnos y descansos
+                        horas_trabajadas_por_operador = {}
+                        
                         for dia in range(dias_a_programar):
                             columna = columnas_dias[dia]
                             dia_programacion = []
                             
-                            # Identificar los operadores que trabajan en este turno
                             num_trabajando = operadores_por_turno
                             num_descansando = num_empleados_este_turno - num_trabajando
                             
-                            # Asignar rotación de descanso
                             indices_descanso = []
                             if num_descansando > 0:
                                 start_descanso_idx = (dia * num_descansando) % num_empleados_este_turno
                                 for k in range(num_descansando):
                                     indices_descanso.append((start_descanso_idx + k) % num_empleados_este_turno)
 
-                            # Asignar rotación de turnos
+                            # Asignar rotación de turnos entre semanas
                             turno_base_idx = i
                             semana = dia // dias_a_cubrir
                             if cantidad_turnos == 3:
@@ -131,12 +131,24 @@ if st.button("Calcular Personal Necesario y Turnos"):
                                 turno_base_idx = (i + semana) % 2
 
                             for j in range(num_empleados_este_turno):
+                                # Actualizar el total de horas para cada operador
+                                if j not in horas_trabajadas_por_operador:
+                                    horas_trabajadas_por_operador[j] = 0
+                                
                                 if j in indices_descanso:
                                     dia_programacion.append("Descanso")
                                 else:
                                     dia_programacion.append(f"Turno {turno_base_idx + 1}")
+                                    horas_trabajadas_por_operador[j] += horas_por_turno
                             
                             df_turno[columna] = dia_programacion
+
+                        # Añadir columnas de total de horas y promedio semanal
+                        total_horas = [horas_trabajadas_por_operador[j] for j in range(num_empleados_este_turno)]
+                        promedio_semanal = [h / 3 for h in total_horas]
+
+                        df_turno['Total Horas'] = total_horas
+                        df_turno['Promedio Semanal'] = promedio_semanal
 
                         st.dataframe(df_turno, hide_index=True, use_container_width=True)
 
