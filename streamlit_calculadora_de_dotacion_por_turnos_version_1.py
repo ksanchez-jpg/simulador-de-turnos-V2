@@ -9,6 +9,8 @@ def to_excel(dfs_dict):
     Convierte un diccionario de DataFrames en un archivo Excel con múltiples hojas.
     """
     output = io.BytesIO()
+    # Usando 'excel' como motor de escritura. Este es el motor por defecto en muchas instalaciones de Pandas
+    # y no requiere 'xlsxwriter' ni 'openpyxl'.
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         for sheet_name, df in dfs_dict.items():
             df.to_excel(writer, sheet_name=sheet_name, index=False)
