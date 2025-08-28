@@ -2,7 +2,6 @@ import streamlit as st
 import math
 import pandas as pd
 import io
-import xlsxwriter
 
 # Función para convertir múltiples DataFrames a un archivo Excel en memoria
 def to_excel(dfs_dict):
