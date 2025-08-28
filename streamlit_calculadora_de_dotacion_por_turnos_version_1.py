@@ -85,49 +85,54 @@ if st.button("Calcular Personal Necesario y Turnos"):
                     else:
                         turnos_horarios = ["06:00 - 18:00", "18:00 - 06:00"]
                     
-                    st.info(f"Horarios de turnos: Turno 1 ({turnos_horarios[0]}), Turno 2 ({turnos_horarios[1]})" + (f", Turno 3 ({turnos_horarios[2]})" if cantidad_turnos == 3 else ""))
-
                     # Definir el número de días a programar (dos semanas)
                     dias_a_programar = dias_a_cubrir * 2
                     dias_semana_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
                     columnas_dias = [f"{dias_semana_nombres[d % 7]} Sem{d // 7 + 1}" for d in range(dias_a_programar)]
 
-                    # Crear un DataFrame para la programación completa
-                    columnas = ['Operador'] + columnas_dias
-                    df_programacion = pd.DataFrame(columns=columnas)
-                    
-                    # Llenar la programación
-                    for i in range(personal_final_necesario):
-                        fila_data = { 'Operador': f"{cargo} {i + 1}" }
+                    # Distribuir el personal en las tablas de forma secuencial
+                    base_empleados_por_turno = personal_final_necesario // cantidad_turnos
+                    resto_empleados = personal_final_necesario % cantidad_turnos
+
+                    start_index_global = 0
+                    for i in range(cantidad_turnos):
+                        # Determinar el número de empleados para esta tabla/turno
+                        num_empleados_este_turno = base_empleados_por_turno + (1 if i < resto_empleados else 0)
+                        end_index_global = start_index_global + num_empleados_este_turno
+
+                        st.subheader(f"Tabla Turno {i + 1}: {turnos_horarios[i]}")
+                        
+                        # Crear el DataFrame para esta tabla
+                        data = {'Operador': [f"{cargo} {op_idx + 1}" for op_idx in range(start_index_global, end_index_global)]}
+                        df_turno = pd.DataFrame(data)
+
+                        # Calcular la cantidad de operadores de descanso por día para esta tabla
+                        personal_descanso_este_turno = num_empleados_este_turno - operadores_por_turno
+                        
+                        # Llenar las columnas de los días
                         for dia in range(dias_a_programar):
-                            # Asignar turno rotativo
-                            # La cantidad de turnos activos es la cantidad de turnos * el personal requerido por turno
-                            personas_en_turno = operadores_por_turno * cantidad_turnos
+                            columna = columnas_dias[dia]
+                            dia_programacion = []
                             
-                            # Indices de los que trabajan
-                            trabajo_inicio_idx = (dia * personas_en_turno) % personal_final_necesario
-                            trabajo_fin_idx = (trabajo_inicio_idx + personas_en_turno) % personal_final_necesario
+                            # Determinar los índices de los que descansan ese día
+                            indices_descanso = []
+                            if personal_descanso_este_turno > 0:
+                                start_descanso_idx = (dia * personal_descanso_este_turno) % num_empleados_este_turno
+                                for k in range(personal_descanso_este_turno):
+                                    indices_descanso.append((start_descanso_idx + k) % num_empleados_este_turno)
                             
-                            # Asignar a cada persona su estado (trabajo o descanso)
-                            es_trabajo = False
-                            if trabajo_inicio_idx <= trabajo_fin_idx:
-                                if trabajo_inicio_idx <= i < trabajo_fin_idx:
-                                    es_trabajo = True
-                            else: # Pasa por el final de la lista
-                                if i >= trabajo_inicio_idx or i < trabajo_fin_idx:
-                                    es_trabajo = True
+                            # Asignar trabajo o descanso
+                            for j in range(num_empleados_este_turno):
+                                if j in indices_descanso:
+                                    dia_programacion.append("Descanso")
+                                else:
+                                    dia_programacion.append(f"Turno {i + 1}")
                             
-                            if es_trabajo:
-                                # Asignar turno rotativo a los que no están en descanso
-                                turno_asignado_idx = (i + dia) % cantidad_turnos
-                                fila_data[columnas_dias[dia]] = f"Turno {turno_asignado_idx + 1}"
-                            else:
-                                fila_data[columnas_dias[dia]] = "Descanso"
+                            df_turno[columna] = dia_programacion
 
-                        # Añadir la fila al DataFrame
-                        df_programacion.loc[len(df_programacion)] = fila_data
+                        st.dataframe(df_turno, hide_index=True, use_container_width=True)
 
-                    st.dataframe(df_programacion, hide_index=True, use_container_width=True)
+                        start_index_global = end_index_global
 
     except Exception as e:
         st.error(f"Ha ocurrido un error en el cálculo. Por favor, revise los valores ingresados. Error: {e}")
