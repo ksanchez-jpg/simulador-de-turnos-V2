@@ -166,15 +166,6 @@ if st.button("Calcular Personal Necesario y Turnos"):
                         all_turnos_dfs[f"Turno {i + 1}"] = df_turno
 
                         start_index_global = end_index_global
-                    
-                    # --- Botón de descarga de Excel ---
-                    if all_turnos_dfs:
-                        st.download_button(
-                            label="Descargar Programación a Excel",
-                            data=to_excel(all_turnos_dfs),
-                            file_name='Programacion_Turnos.xlsx',
-                            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                        )
 
     except Exception as e:
         st.error(f"Ha ocurrido un error en el cálculo. Por favor, revise los valores ingresados. Error: {e}")
