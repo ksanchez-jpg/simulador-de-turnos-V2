@@ -85,8 +85,8 @@ if st.button("Calcular Personal Necesario y Turnos"):
                     else:
                         turnos_horarios = ["06:00 - 18:00", "18:00 - 06:00"]
                     
-                    # Definir el número de días a programar (dos semanas)
-                    dias_a_programar = dias_a_cubrir * 2
+                    # Definir el número de días a programar (tres semanas)
+                    dias_a_programar = dias_a_cubrir * 3
                     dias_semana_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
                     columnas_dias = [f"{dias_semana_nombres[d % 7]} Sem{d // 7 + 1}" for d in range(dias_a_programar)]
 
@@ -124,13 +124,11 @@ if st.button("Calcular Personal Necesario y Turnos"):
 
                             # Asignar rotación de turnos
                             turno_base_idx = i
-                            if dia >= 7: # Si es la segunda semana
-                                if cantidad_turnos == 3:
-                                    # T1 -> T2, T2 -> T3, T3 -> T1
-                                    turno_base_idx = (i + 1) % 3
-                                else: # 2 turnos
-                                    # T1 -> T2, T2 -> T1
-                                    turno_base_idx = (i + 1) % 2
+                            semana = dia // dias_a_cubrir
+                            if cantidad_turnos == 3:
+                                turno_base_idx = (i + semana) % 3
+                            else:
+                                turno_base_idx = (i + semana) % 2
 
                             for j in range(num_empleados_este_turno):
                                 if j in indices_descanso:
