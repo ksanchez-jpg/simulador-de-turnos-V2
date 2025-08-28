@@ -1,6 +1,19 @@
 import streamlit as st
 import math
 import pandas as pd
+import io
+
+# Función para convertir múltiples DataFrames a un archivo Excel en memoria
+def to_excel(dfs_dict):
+    """
+    Convierte un diccionario de DataFrames en un archivo Excel con múltiples hojas.
+    """
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        for sheet_name, df in dfs_dict.items():
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+    processed_data = output.getvalue()
+    return processed_data
 
 # Título de la aplicación
 st.title("Calculadora de Personal y Programación de Turnos")
@@ -90,6 +103,9 @@ if st.button("Calcular Personal Necesario y Turnos"):
                     dias_semana_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
                     columnas_dias = [f"{dias_semana_nombres[d % 7]} Sem{d // 7 + 1}" for d in range(dias_a_programar)]
 
+                    # Diccionario para almacenar los DataFrames de cada turno
+                    all_turnos_dfs = {}
+
                     # Distribuir el personal en las tablas de forma secuencial
                     base_empleados_por_turno = personal_final_necesario // cantidad_turnos
                     resto_empleados = personal_final_necesario % cantidad_turnos
@@ -121,7 +137,6 @@ if st.button("Calcular Personal Necesario y Turnos"):
                                     indices_descanso.append((start_descanso_idx + k) % num_empleados_este_turno)
 
                             # Asignar rotación de turnos entre semanas
-                            # La rotación ocurre cada lunes (inicio de semana)
                             turno_base_idx = i
                             semana = dia // dias_a_cubrir
                             if cantidad_turnos == 3:
@@ -146,7 +161,19 @@ if st.button("Calcular Personal Necesario y Turnos"):
 
                         st.dataframe(df_turno, hide_index=True, use_container_width=True)
 
+                        # Almacenar el DataFrame en el diccionario
+                        all_turnos_dfs[f"Turno {i + 1}"] = df_turno
+
                         start_index_global = end_index_global
+                    
+                    # --- Botón de descarga de Excel ---
+                    if all_turnos_dfs:
+                        st.download_button(
+                            label="Descargar Programación a Excel",
+                            data=to_excel(all_turnos_dfs),
+                            file_name='Programacion_Turnos.xlsx',
+                            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                        )
 
     except Exception as e:
         st.error(f"Ha ocurrido un error en el cálculo. Por favor, revise los valores ingresados. Error: {e}")
