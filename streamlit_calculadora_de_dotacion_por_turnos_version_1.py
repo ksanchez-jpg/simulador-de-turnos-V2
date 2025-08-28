@@ -111,7 +111,10 @@ if st.button("Calcular Personal Necesario y Turnos"):
                     
                     # Inicializar un diccionario para llevar el seguimiento de las horas trabajadas por operador
                     horas_trabajadas_por_operador = {op_idx: 0 for op_idx in range(personal_final_necesario)}
-
+                    
+                    # Calcular el número de turnos necesarios para cada operador
+                    num_turnos_por_operador = math.floor(horas_totales_por_operador / horas_por_turno)
+                    
                     # Distribuir el personal en las tablas de forma secuencial
                     base_empleados_por_turno = personal_final_necesario // cantidad_turnos
                     resto_empleados = personal_final_necesario % cantidad_turnos
@@ -133,14 +136,27 @@ if st.button("Calcular Personal Necesario y Turnos"):
                             columna = columnas_dias[dia]
                             dia_programacion = []
                             
+                            # Obtener los operadores para este día en este turno
+                            ops_en_este_turno = []
+                            ops_con_descanso = []
+                            for j in range(num_empleados_este_turno):
+                                global_op_idx = start_index_global + j
+                                
+                                # Comprobar si el operador ya cumplió con su objetivo de turnos
+                                if horas_trabajadas_por_operador.get(global_op_idx, 0) >= horas_totales_por_operador:
+                                    ops_con_descanso.append(j)
+                                else:
+                                    ops_en_este_turno.append(j)
+                                    
+                            # Lógica de rotación de descanso para los que aún no han cumplido el objetivo
                             num_trabajando = operadores_por_turno
-                            num_descansando = num_empleados_este_turno - num_trabajando
+                            num_descansando_hoy = len(ops_en_este_turno) - num_trabajando
                             
-                            indices_descanso = []
-                            if num_descansando > 0:
-                                start_descanso_idx = (dia * num_descansando) % num_empleados_este_turno
-                                for k in range(num_descansando):
-                                    indices_descanso.append((start_descanso_idx + k) % num_empleados_este_turno)
+                            indices_descanso_hoy = []
+                            if num_descansando_hoy > 0:
+                                start_descanso_idx = (dia * num_descansando_hoy) % len(ops_en_este_turno)
+                                for k in range(num_descansando_hoy):
+                                    indices_descanso_hoy.append((start_descanso_idx + k) % len(ops_en_este_turno))
 
                             # Asignar rotación de turnos entre semanas
                             turno_base_idx = i
@@ -153,11 +169,10 @@ if st.button("Calcular Personal Necesario y Turnos"):
                             for j in range(num_empleados_este_turno):
                                 global_op_idx = start_index_global + j
                                 
-                                # Lógica para asegurar que todos queden con 40 horas
-                                if horas_trabajadas_por_operador.get(global_op_idx, 0) >= horas_totales_por_operador:
-                                     dia_programacion.append("Descanso")
+                                if j in ops_con_descanso:
+                                    dia_programacion.append("Descanso")
                                 else:
-                                    if j in indices_descanso:
+                                    if ops_en_este_turno.index(j) in indices_descanso_hoy:
                                         dia_programacion.append("Descanso")
                                     else:
                                         dia_programacion.append(f"Turno {turno_base_idx + 1}")
