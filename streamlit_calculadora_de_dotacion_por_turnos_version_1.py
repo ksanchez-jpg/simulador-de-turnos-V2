@@ -95,7 +95,9 @@ if st.button("Calcular Personal Necesario y Turnos"):
                     target_total_hours = horas_promedio_semanal * 3
                     num_turnos_por_operador_total = math.floor(target_total_hours / horas_por_turno)
                     horas_totales_por_operador = num_turnos_por_operador_total * horas_por_turno
-                    
+
+                    # Se informa al usuario sobre el ajuste de horas
+                    st.info(f"El objetivo de horas total por operador se ha ajustado a {horas_totales_por_operador} ({horas_totales_por_operador/3:.2f} promedio semanal) para un balance preciso con turnos de {horas_por_turno} horas.")
 
                     # Inicializar un diccionario para llevar el seguimiento de las horas trabajadas por operador
                     horas_trabajadas_por_operador = {op_idx: 0 for op_idx in range(personal_final_necesario)}
@@ -163,6 +165,9 @@ if st.button("Calcular Personal Necesario y Turnos"):
 
                         start_index_global = end_index_global
                     
+
+    except Exception as e:
+        st.error(f"Ha ocurrido un error en el cálculo. Por favor, revise los valores ingresados. Error: {e}") 
 
     except Exception as e:
         st.error(f"Ha ocurrido un error en el cálculo. Por favor, revise los valores ingresados. Error: {e}")
