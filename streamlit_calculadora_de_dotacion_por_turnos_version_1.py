@@ -1,128 +1,101 @@
 import streamlit as st
-import pandas as pd
 import math
 
-# -------------------- CONFIGURACIÓN APP --------------------
-st.set_page_config(
-    page_title="CÁLCULO Y PROGRAMACIÓN DE TURNOS",
-    page_icon="📋",
-    layout="wide"
-)
+# Título de la aplicación
+st.title("Calculadora de Personal y Programación de Turnos")
+st.write("Ingrese los parámetros a continuación para calcular el personal necesario y generar la programación de turnos.")
 
-st.title("📋 CÁLCULO DE PERSONAL Y PROGRAMACIÓN DE TURNOS")
-st.caption("Generador de programación automática de turnos en tablas separadas.")
+# --- Sección de Parámetros de Entrada ---
+st.header("Parámetros de la Programación")
 
-# -------------------- ENTRADAS --------------------
-col1, col2 = st.columns(2)
+# Campos de entrada de texto para el cargo
+cargo = st.text_input("Cargo del personal (ej: Operador de Máquina)", "Operador")
 
-with col1:
-    cargo = st.text_input("Nombre del cargo", value="Operador")
-    ausentismo_pct = st.number_input("% de ausentismo", 0.0, 100.0, 8.0, step=0.5)
-    horas_prom_bisem = st.number_input("Horas por semana (promedio bisemanal)", 10.0, 60.0, 42.0, step=0.5)
-    personal_vacaciones = st.number_input("Personal de vacaciones", min_value=0, value=0, step=1)
+# Campos de entrada numéricos con valores mínimos y máximos
+personal_actual = st.number_input("Cantidad de personal actual en el cargo", min_value=0, value=1)
+ausentismo_porcentaje = st.number_input("Porcentaje de ausentismo (%)", min_value=0.0, max_value=100.0, value=5.0)
+dias_a_cubrir = st.number_input("Días a cubrir por semana", min_value=1, max_value=7, value=7)
+horas_promedio_semanal = st.number_input("Horas promedio semanales por operador (últimas 2 semanas)", min_value=1, value=48)
+personal_vacaciones = st.number_input("Personal de vacaciones en el período de programación", min_value=0, value=0)
+operadores_por_turno = st.number_input("Cantidad de operadores requeridos por turno", min_value=1, value=1)
 
-with col2:
-    personas_actuales = st.number_input("Total de personas actuales en el cargo", min_value=0, value=6, step=1)
-    dias_cubrir = st.number_input("Días a cubrir en la semana", 1, 7, 7, step=1)
-    config_turnos = st.selectbox("Configuración de turnos", ("3 turnos de 8 horas", "2 turnos de 12 horas"))
-    dias_vacaciones = st.number_input("Días de vacaciones", min_value=0, value=0, step=1)
-    min_operadores_turno = st.number_input("Cantidad mínima de operadores por turno", 1, value=3, step=1)
-
-# -------------------- CONFIGURACIÓN DE TURNOS --------------------
-if "3 turnos" in config_turnos:
-    n_turnos_dia, horas_por_turno = 3, 8
+# Selección de turnos y validación de horas por turno
+st.subheader("Configuración de Turnos")
+cantidad_turnos = st.selectbox("Cantidad de turnos", [2, 3], index=1)
+if cantidad_turnos == 3:
+    horas_por_turno = 8
+    st.write("Horas por turno (automático): 8 horas (para 3 turnos)")
 else:
-    n_turnos_dia, horas_por_turno = 2, 12
+    horas_por_turno = 12
+    st.write("Horas por turno (automático): 12 horas (para 2 turnos)")
 
-# -------------------- CÁLCULO DE PERSONAL --------------------
-horas_semana_requeridas = dias_cubrir * n_turnos_dia * horas_por_turno * min_operadores_turno
-factor_disponibilidad = 1.0 - (ausentismo_pct / 100.0)
-
-if factor_disponibilidad <= 0:
-    st.error("El % de ausentismo no puede ser 100% o más.")
-    st.stop()
-
-horas_semana_ajustadas = horas_semana_requeridas / factor_disponibilidad
-personal_requerido_base = horas_semana_ajustadas / horas_prom_bisem
-
-# Ajuste por vacaciones
-horas_vacaciones = personal_vacaciones * dias_vacaciones * horas_por_turno
-personal_requerido_vacaciones = horas_vacaciones / horas_prom_bisem
-
-# Total requerido
-personal_total_requerido = math.ceil(personal_requerido_base + personal_requerido_vacaciones)
-brecha = personal_total_requerido - personas_actuales
-
-# -------------------- RESULTADOS --------------------
-st.subheader("📊 Resultados")
-st.metric("Personal total necesario", f"{personal_total_requerido}")
-st.metric("Brecha de personal (faltante)", f"{brecha}")
-
-st.divider()
-
-
-# -------------------- PROGRAMACIÓN DE TURNOS --------------------
-import pandas as pd
-import random
-
-# -----------------------------
-# ENTRADAS DEL USUARIO
-# -----------------------------
-tipo_turno = int(input("¿Turnos de cuántas horas? (8 o 12): "))
-total_operadores = int(input("¿Cuántos operadores en total?: "))
-min_operadores_turno = int(input("¿Mínimo de operadores por turno?: "))
-semanas = int(input("¿Cuántas semanas quieres programar?: "))
-
-# Definir número de turnos
-if tipo_turno == 8:
-    num_turnos = 3
-elif tipo_turno == 12:
-    num_turnos = 2
-else:
-    raise ValueError("Debes ingresar 8 o 12.")
-
-# Crear lista de operadores
-operadores = [f"Op{i+1}" for i in range(total_operadores)]
-
-# Definir días de la semana
-dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-
-# Crear la estructura de asignación
-asignacion = {turno: {op: [] for op in operadores} for turno in range(1, num_turnos+1)}
-
-# -----------------------------
-# PROGRAMACIÓN AUTOMÁTICA
-# -----------------------------
-for semana in range(1, semanas+1):
-    for dia in dias_semana:
-        disponibles = operadores.copy()
-        random.shuffle(disponibles)  # rotación aleatoria cada día
-        
-        for turno in range(1, num_turnos+1):
-            asignados = disponibles[:min_operadores_turno]   # operadores que trabajan en este turno
-            disponibles = disponibles[min_operadores_turno:] # los que sobran siguen disponibles
+# --- Botón para Iniciar el Cálculo ---
+if st.button("Calcular Personal Necesario y Turnos"):
+    try:
+        # Validación de valores para evitar errores de cálculo
+        if personal_actual <= 0 or dias_a_cubrir <= 0 or horas_promedio_semanal <= 0 or operadores_por_turno <= 0:
+            st.error("Por favor, ingrese valores válidos mayores a cero.")
+        else:
+            # --- Lógica de Cálculo ---
             
-            for op in operadores:
-                if op in asignados:
-                    asignacion[turno][op].append(f"{tipo_turno}h")
+            # 1. Calcular las horas de trabajo totales requeridas por semana
+            # Se asume que la operación es 24/7 (24 horas diarias) con turnos de 8 o 12 horas.
+            horas_operacion_diarias = cantidad_turnos * horas_por_turno
+            horas_trabajo_totales_semanales = dias_a_cubrir * horas_operacion_diarias * operadores_por_turno
+            
+            # 2. Calcular el personal teórico necesario (sin ausentismo/vacaciones)
+            personal_teorico = horas_trabajo_totales_semanales / horas_promedio_semanal
+            
+            # 3. Ajustar el personal por ausentismo
+            # Se usa una fórmula para ajustar el personal necesario para compensar las ausencias.
+            factor_ausentismo = 1 - (ausentismo_porcentaje / 100)
+            if factor_ausentismo <= 0:
+                 st.error("El porcentaje de ausentismo no puede ser 100% o más. Por favor, ajuste el valor.")
+            else:
+                personal_ajustado_ausentismo = personal_teorico / factor_ausentismo
+                
+                # 4. Sumar el personal de vacaciones
+                personal_final_necesario = math.ceil(personal_ajustado_ausentismo + personal_vacaciones)
+                
+                # 5. Calcular la brecha de personal (si la hay)
+                diferencia_personal = personal_final_necesario - personal_actual
+
+                # --- Sección de Resultados ---
+                st.header("Resultados del Cálculo")
+                st.metric(label="Personal Requerido para no generar horas extras", value=f"{personal_final_necesario} persona(s)")
+                st.metric(label=f"Horas de trabajo totales requeridas a la semana para {cargo}", value=f"{horas_trabajo_totales_semanales} horas")
+                
+                # Mostrar la brecha de personal
+                if diferencia_personal > 0:
+                    st.warning(f"Se necesitan **{diferencia_personal}** personas adicionales para cubrir la operación.")
+                elif diferencia_personal < 0:
+                    st.info(f"Tienes **{abs(diferencia_personal)}** personas de más, lo que podría reducir costos o permitir más personal de reserva.")
                 else:
-                    asignacion[turno][op].append("Descanso")
-
-# -----------------------------
-# CREAR Y MOSTRAR TABLAS
-# -----------------------------
-columnas = []
-for s in range(1, semanas+1):
-    columnas.extend([f"{d} Sem{s}" for d in dias_semana])
-
-for turno in range(1, num_turnos+1):
-    data = { "Operador": operadores }
-    for idx, op in enumerate(operadores):
-        data[op] = asignacion[turno][op]
-    df = pd.DataFrame(asignacion[turno]).T
-    df["Operador"] = df.index
-    df.reset_index(drop=True, inplace=True)
-    df.columns = ["Operador"] + columnas
-    print(f"\n--- 📋 PROGRAMACIÓN TURNO {turno} ---")
-    display(df)
-
+                    st.success("¡El personal actual es el ideal para esta operación!")
+                
+                # --- Programación de Turnos Sugerida ---
+                st.header("Programación de Turnos Sugerida (basada en el personal requerido)")
+                if personal_final_necesario > 0:
+                    turnos_por_dia = []
+                    # Generar los turnos de inicio y fin
+                    for i in range(cantidad_turnos):
+                        hora_inicio = i * horas_por_turno
+                        hora_fin = (hora_inicio + horas_por_turno) % 24
+                        turnos_por_dia.append(f"{hora_inicio:02d}:00 - {hora_fin:02d}:00")
+                    
+                    # Asignar un turno a cada persona por día
+                    for i in range(personal_final_necesario):
+                        empleado_id = f"{cargo} {i + 1}"
+                        st.write(f"**{empleado_id}**")
+                        
+                        programacion_empleado = []
+                        for dia in range(dias_a_cubrir):
+                            turno_asignado = (i + dia) % cantidad_turnos
+                            programacion_empleado.append(f"Día {dia + 1}: {turnos_por_dia[turno_asignado]}")
+                        st.write(", ".join(programacion_empleado))
+                
+                else:
+                    st.info("No se necesita personal para la operación, por lo que no se genera una programación de turnos.")
+    
+    except Exception as e:
+        st.error(f"Ha ocurrido un error en el cálculo. Por favor, revise los valores ingresados. Error: {e}")
