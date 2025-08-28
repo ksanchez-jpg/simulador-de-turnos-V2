@@ -1,7 +1,6 @@
 import streamlit as st
 import math
 import pandas as pd
-import io
 
 # Título de la aplicación
 st.title("Calculadora de Personal y Programación de Turnos")
@@ -17,7 +16,7 @@ cargo = st.text_input("Cargo del personal (ej: Operador de Máquina)", "Operador
 personal_actual = st.number_input("Cantidad de personal actual en el cargo", min_value=0, value=1)
 ausentismo_porcentaje = st.number_input("Porcentaje de ausentismo (%)", min_value=0.0, max_value=100.0, value=5.0)
 dias_a_cubrir = st.number_input("Días a cubrir por semana", min_value=1, max_value=7, value=7)
-horas_promedio_semanal = st.number_input("Horas promedio semanales por operador (últimas 3 semanas)", min_value=1, value=42)
+horas_promedio_semanal = st.number_input("Horas promedio semanales por operador (últimas 3 semanas)", min_value=1, value=40)
 personal_vacaciones = st.number_input("Personal de vacaciones en el período de programación", min_value=0, value=0)
 operadores_por_turno = st.number_input("Cantidad de operadores requeridos por turno", min_value=1, value=1)
 
@@ -91,11 +90,10 @@ if st.button("Calcular Personal Necesario y Turnos"):
                     dias_semana_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
                     columnas_dias = [f"{dias_semana_nombres[d % 7]} Sem{d // 7 + 1}" for d in range(dias_a_programar)]
 
-                    # Diccionario para almacenar los DataFrames de cada turno
-                    all_turnos_dfs = {}
-                    
-                    # Horas totales a cumplir por cada operador
-                    horas_totales_por_operador = horas_promedio_semanal * 3
+                    # Horas totales a cumplir por cada operador (objetivo)
+                    # Para ser lo más preciso posible sin exceder 42 horas, se elige 40, que es múltiplo de 8 y 12.
+                    horas_objetivo = 40
+                    horas_totales_por_operador = horas_objetivo * 3
                     
                     # Inicializar un diccionario para llevar el seguimiento de las horas trabajadas por operador
                     horas_trabajadas_por_operador = {op_idx: 0 for op_idx in range(personal_final_necesario)}
@@ -141,9 +139,8 @@ if st.button("Calcular Personal Necesario y Turnos"):
                             for j in range(num_empleados_este_turno):
                                 global_op_idx = start_index_global + j
                                 
-                                # Lógica para asegurar que todos queden con 40 horas
                                 if horas_trabajadas_por_operador.get(global_op_idx, 0) >= horas_totales_por_operador:
-                                     dia_programacion.append("Descanso")
+                                    dia_programacion.append("Descanso")
                                 else:
                                     if j in indices_descanso:
                                         dia_programacion.append("Descanso")
@@ -162,10 +159,8 @@ if st.button("Calcular Personal Necesario y Turnos"):
 
                         st.dataframe(df_turno, hide_index=True, use_container_width=True)
 
-                        # Almacenar el DataFrame en el diccionario
-                        all_turnos_dfs[f"Turno {i + 1}"] = df_turno
-
                         start_index_global = end_index_global
+                    
 
     except Exception as e:
         st.error(f"Ha ocurrido un error en el cálculo. Por favor, revise los valores ingresados. Error: {e}")
