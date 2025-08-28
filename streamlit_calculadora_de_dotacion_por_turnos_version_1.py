@@ -1,5 +1,6 @@
 import streamlit as st
 import math
+import pandas as pd
 
 # Título de la aplicación
 st.title("Calculadora de Personal y Programación de Turnos")
@@ -39,7 +40,6 @@ if st.button("Calcular Personal Necesario y Turnos"):
             # --- Lógica de Cálculo ---
             
             # 1. Calcular las horas de trabajo totales requeridas por semana
-            # Se asume que la operación es 24/7 (24 horas diarias) con turnos de 8 o 12 horas.
             horas_operacion_diarias = cantidad_turnos * horas_por_turno
             horas_trabajo_totales_semanales = dias_a_cubrir * horas_operacion_diarias * operadores_por_turno
             
@@ -47,7 +47,6 @@ if st.button("Calcular Personal Necesario y Turnos"):
             personal_teorico = horas_trabajo_totales_semanales / horas_promedio_semanal
             
             # 3. Ajustar el personal por ausentismo
-            # Se usa una fórmula para ajustar el personal necesario para compensar las ausencias.
             factor_ausentismo = 1 - (ausentismo_porcentaje / 100)
             if factor_ausentismo <= 0:
                  st.error("El porcentaje de ausentismo no puede ser 100% o más. Por favor, ajuste el valor.")
@@ -82,18 +81,36 @@ if st.button("Calcular Personal Necesario y Turnos"):
                         hora_inicio = i * horas_por_turno
                         hora_fin = (hora_inicio + horas_por_turno) % 24
                         turnos_por_dia.append(f"{hora_inicio:02d}:00 - {hora_fin:02d}:00")
-                    
-                    # Asignar un turno a cada persona por día
-                    for i in range(personal_final_necesario):
-                        empleado_id = f"{cargo} {i + 1}"
-                        st.write(f"**{empleado_id}**")
+
+                    # Distribuir el personal en las 3 tablas de forma secuencial
+                    empleados_por_turno_base = personal_final_necesario // cantidad_turnos
+                    resto_empleados = personal_final_necesario % cantidad_turnos
+
+                    start_idx = 0
+                    for i in range(cantidad_turnos):
+                        st.subheader(f"Tabla Turno {i + 1}: {turnos_por_dia[i]}")
                         
-                        programacion_empleado = []
-                        for dia in range(dias_a_cubrir):
-                            turno_asignado = (i + dia) % cantidad_turnos
-                            programacion_empleado.append(f"Día {dia + 1}: {turnos_por_dia[turno_asignado]}")
-                        st.write(", ".join(programacion_empleado))
-                
+                        # Calcular el número de empleados para este turno
+                        num_empleados_este_turno = empleados_por_turno_base
+                        if i < resto_empleados:
+                            num_empleados_este_turno += 1
+
+                        if num_empleados_este_turno > 0:
+                            # Crear un DataFrame para la tabla
+                            data = {
+                                'Operador': [f"{cargo} {j + 1}" for j in range(start_idx, start_idx + num_empleados_este_turno)],
+                            }
+                            # Agregar los días de la semana como columnas
+                            for dia in range(dias_a_cubrir):
+                                data[f'Día {dia + 1}'] = ['Turno {}'.format(i + 1)] * num_empleados_este_turno
+                            
+                            df = pd.DataFrame(data)
+                            st.dataframe(df, hide_index=True, use_container_width=True)
+                            
+                            start_idx += num_empleados_este_turno
+                        else:
+                            st.info(f"No hay personal asignado para el Turno {i + 1}.")
+
                 else:
                     st.info("No se necesita personal para la operación, por lo que no se genera una programación de turnos.")
     
