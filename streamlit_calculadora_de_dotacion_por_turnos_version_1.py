@@ -62,47 +62,67 @@ st.divider()
 
 
 # -------------------- PROGRAMACIÓN DE TURNOS --------------------
-import streamlit as st
 import pandas as pd
 import random
 
-st.title("📅 Programación Automática de Turnos")
+# -----------------------------
+# ENTRADAS DEL USUARIO
+# -----------------------------
+tipo_turno = int(input("¿Turnos de cuántas horas? (8 o 12): "))
+total_operadores = int(input("¿Cuántos operadores en total?: "))
+min_operadores_turno = int(input("¿Mínimo de operadores por turno?: "))
+semanas = int(input("¿Cuántas semanas quieres programar?: "))
 
-# Entradas del usuario
-tipo_turno = st.selectbox("Selecciona duración del turno", ["8H", "12H"])
-total_operadores = st.number_input("Número total de operadores", min_value=1, value=12)
-min_operadores = st.number_input("Mínimo de operadores por turno", min_value=1, value=3)
-num_semanas = st.number_input("Número de semanas a programar", min_value=1, value=2)
-
-# Calcular número de turnos posibles
-num_turnos = total_operadores // min_operadores
-st.write(f"Se pueden programar **{num_turnos} turnos** con al menos {min_operadores} operadores por turno")
+# Definir número de turnos
+if tipo_turno == 8:
+    num_turnos = 3
+elif tipo_turno == 12:
+    num_turnos = 2
+else:
+    raise ValueError("Debes ingresar 8 o 12.")
 
 # Crear lista de operadores
 operadores = [f"Op{i+1}" for i in range(total_operadores)]
 
-# Dividir operadores en turnos
-turnos = [operadores[i::num_turnos] for i in range(num_turnos)]
+# Definir días de la semana
+dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
-# Días y semanas
-dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-columnas = [f"{d} Sem{s+1}" for s in range(num_semanas) for d in dias]
+# Crear la estructura de asignación
+asignacion = {turno: {op: [] for op in operadores} for turno in range(1, num_turnos+1)}
 
-# Generar las tablas de turnos
-for t, grupo in enumerate(turnos, start=1):
-    data = []
-    for op in grupo:
-        fila = []
-        for c in columnas:
-            # Rotar descanso: probabilidad de descanso menor si hay pocos operadores
-            if random.random() < 1/len(grupo):
-                fila.append("Descanso")
-            else:
-                fila.append(tipo_turno)
-        data.append([op] + fila)
-    
-    df = pd.DataFrame(data, columns=["Operador"] + columnas)
-    
-    st.subheader(f"Turno {t}")
-    st.dataframe(df)
+# -----------------------------
+# PROGRAMACIÓN AUTOMÁTICA
+# -----------------------------
+for semana in range(1, semanas+1):
+    for dia in dias_semana:
+        disponibles = operadores.copy()
+        random.shuffle(disponibles)  # rotación aleatoria cada día
+        
+        for turno in range(1, num_turnos+1):
+            asignados = disponibles[:min_operadores_turno]   # operadores que trabajan en este turno
+            disponibles = disponibles[min_operadores_turno:] # los que sobran siguen disponibles
+            
+            for op in operadores:
+                if op in asignados:
+                    asignacion[turno][op].append(f"{tipo_turno}h")
+                else:
+                    asignacion[turno][op].append("Descanso")
+
+# -----------------------------
+# CREAR Y MOSTRAR TABLAS
+# -----------------------------
+columnas = []
+for s in range(1, semanas+1):
+    columnas.extend([f"{d} Sem{s}" for d in dias_semana])
+
+for turno in range(1, num_turnos+1):
+    data = { "Operador": operadores }
+    for idx, op in enumerate(operadores):
+        data[op] = asignacion[turno][op]
+    df = pd.DataFrame(asignacion[turno]).T
+    df["Operador"] = df.index
+    df.reset_index(drop=True, inplace=True)
+    df.columns = ["Operador"] + columnas
+    print(f"\n--- 📋 PROGRAMACIÓN TURNO {turno} ---")
+    display(df)
 
