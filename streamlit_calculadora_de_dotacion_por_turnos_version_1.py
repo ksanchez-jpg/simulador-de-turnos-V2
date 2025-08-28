@@ -29,7 +29,7 @@ cargo = st.text_input("Cargo del personal (ej: Operador de Máquina)", "Operador
 personal_actual = st.number_input("Cantidad de personal actual en el cargo", min_value=0, value=1)
 ausentismo_porcentaje = st.number_input("Porcentaje de ausentismo (%)", min_value=0.0, max_value=100.0, value=5.0)
 dias_a_cubrir = st.number_input("Días a cubrir por semana", min_value=1, max_value=7, value=7)
-horas_promedio_semanal = st.number_input("Horas promedio semanales por operador (últimas 2 semanas)", min_value=1, value=42)
+horas_promedio_semanal = st.number_input("Horas promedio semanales por operador (últimas 2 semanas)", min_value=1, value=40)
 personal_vacaciones = st.number_input("Personal de vacaciones en el período de programación", min_value=0, value=0)
 operadores_por_turno = st.number_input("Cantidad de operadores requeridos por turno", min_value=1, value=1)
 
@@ -67,7 +67,7 @@ if st.button("Calcular Personal Necesario y Turnos"):
                 personal_ajustado_ausentismo = personal_teorico / factor_ausentismo
                 
                 # 4. Sumar el personal de vacaciones
-                personal_final_necesario = math.ceil(personal_ajustado_ausentismo + personal_vacaciones)
+                personal_final_necesario = round(personal_ajustado_ausentismo + personal_vacaciones)
                 
                 # 5. Calcular la brecha de personal (si la hay)
                 diferencia_personal = personal_final_necesario - personal_actual
@@ -105,6 +105,9 @@ if st.button("Calcular Personal Necesario y Turnos"):
 
                     # Diccionario para almacenar los DataFrames de cada turno
                     all_turnos_dfs = {}
+                    
+                    # Horas totales a cumplir por cada operador
+                    horas_totales_por_operador = horas_promedio_semanal * 3
                     
                     # Inicializar un diccionario para llevar el seguimiento de las horas trabajadas por operador
                     horas_trabajadas_por_operador = {op_idx: 0 for op_idx in range(personal_final_necesario)}
@@ -150,16 +153,20 @@ if st.button("Calcular Personal Necesario y Turnos"):
                             for j in range(num_empleados_este_turno):
                                 global_op_idx = start_index_global + j
                                 
-                                if j in indices_descanso:
-                                    dia_programacion.append("Descanso")
+                                # Lógica para asegurar que todos queden con 40 horas
+                                if horas_trabajadas_por_operador.get(global_op_idx, 0) >= horas_totales_por_operador:
+                                     dia_programacion.append("Descanso")
                                 else:
-                                    dia_programacion.append(f"Turno {turno_base_idx + 1}")
-                                    horas_trabajadas_por_operador[global_op_idx] += horas_por_turno
+                                    if j in indices_descanso:
+                                        dia_programacion.append("Descanso")
+                                    else:
+                                        dia_programacion.append(f"Turno {turno_base_idx + 1}")
+                                        horas_trabajadas_por_operador[global_op_idx] = horas_trabajadas_por_operador.get(global_op_idx, 0) + horas_por_turno
                             
                             df_turno[columna] = dia_programacion
 
                         # Añadir columnas de total de horas y promedio semanal
-                        total_horas = [horas_trabajadas_por_operador[op_idx] for op_idx in range(start_index_global, end_index_global)]
+                        total_horas = [horas_trabajadas_por_operador.get(op_idx, 0) for op_idx in range(start_index_global, end_index_global)]
                         promedio_semanal = [h / 3 for h in total_horas]
 
                         df_turno['Total Horas'] = total_horas
