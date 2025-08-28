@@ -77,7 +77,7 @@ if st.button("Calcular Personal Necesario y Turnos"):
                     st.error(f"Error: El personal requerido ({personal_final_necesario}) no es suficiente para cubrir los {operadores_por_turno} operadores por turno en {cantidad_turnos} turnos.")
                 else:
                     # --- Sección de Resultados ---
-                    st.header("Resultados del Cálculo")
+                    st.header("Results of Calculation")
                     st.metric(label="Personal Requerido para no generar horas extras", value=f"{personal_final_necesario} persona(s)")
                     st.metric(label=f"Horas de trabajo totales requeridas a la semana para {cargo}", value=f"{horas_trabajo_totales_semanales} horas")
                     
@@ -90,7 +90,7 @@ if st.button("Calcular Personal Necesario y Turnos"):
                         st.success("¡El personal actual es el ideal para esta operación!")
                     
                     # --- Programación de Turnos Sugerida con Descanso Rotativo y Balance de Horas ---
-                    st.header("Programación de Turnos Sugerida (basada en el personal requerido)")
+                    st.header("Suggested Shift Schedule (based on required personnel)")
                     
                     turnos_horarios = []
                     if cantidad_turnos == 3:
