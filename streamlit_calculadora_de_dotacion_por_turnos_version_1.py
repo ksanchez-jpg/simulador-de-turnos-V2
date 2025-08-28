@@ -2,6 +2,7 @@ import streamlit as st
 import math
 import pandas as pd
 import io
+import xlsxwriter
 
 # Función para convertir múltiples DataFrames a un archivo Excel en memoria
 def to_excel(dfs_dict):
@@ -9,7 +10,7 @@ def to_excel(dfs_dict):
     Convierte un diccionario de DataFrames en un archivo Excel con múltiples hojas.
     """
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         for sheet_name, df in dfs_dict.items():
             df.to_excel(writer, sheet_name=sheet_name, index=False)
     processed_data = output.getvalue()
