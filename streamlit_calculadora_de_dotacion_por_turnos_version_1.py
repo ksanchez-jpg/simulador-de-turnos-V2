@@ -72,41 +72,72 @@ if st.button("Calcular Personal Necesario y Turnos"):
                 else:
                     st.success("¡El personal actual es el ideal para esta operación!")
                 
-                # --- Programación de Turnos Sugerida ---
+                # --- Programación de Turnos Sugerida con Descanso Rotativo ---
                 st.header("Programación de Turnos Sugerida (basada en el personal requerido)")
                 if personal_final_necesario > 0:
                     turnos_por_dia = []
-                    # Generar los turnos de inicio y fin
-                    for i in range(cantidad_turnos):
-                        hora_inicio = i * horas_por_turno
-                        hora_fin = (hora_inicio + horas_por_turno) % 24
-                        turnos_por_dia.append(f"{hora_inicio:02d}:00 - {hora_fin:02d}:00")
+                    # Generar los turnos de inicio y fin con los horarios fijos
+                    if cantidad_turnos == 3:
+                        turnos_por_dia = ["06:00 - 14:00", "14:00 - 22:00", "22:00 - 06:00"]
+                    else:
+                        turnos_por_dia = ["06:00 - 18:00", "18:00 - 06:00"]
 
-                    # Distribuir el personal en las 3 tablas de forma secuencial
+                    # Definir el número de días a programar (dos semanas)
+                    dias_a_programar = dias_a_cubrir * 2
+                    dias_semana_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+                    columnas_dias = [f"{dias_semana_nombres[d % 7]} Sem{d // 7 + 1}" for d in range(dias_a_programar)]
+
+                    # Calcular el número de personas en descanso por día
+                    personas_en_turno = operadores_por_turno * cantidad_turnos
+                    personas_descanso = personal_final_necesario - personas_en_turno
+
+                    # Crear un DataFrame para cada turno
                     empleados_por_turno_base = personal_final_necesario // cantidad_turnos
                     resto_empleados = personal_final_necesario % cantidad_turnos
 
                     start_idx = 0
                     for i in range(cantidad_turnos):
                         st.subheader(f"Tabla Turno {i + 1}: {turnos_por_dia[i]}")
-                        
+
                         # Calcular el número de empleados para este turno
                         num_empleados_este_turno = empleados_por_turno_base
                         if i < resto_empleados:
                             num_empleados_este_turno += 1
 
                         if num_empleados_este_turno > 0:
-                            # Crear un DataFrame para la tabla
-                            data = {
-                                'Operador': [f"{cargo} {j + 1}" for j in range(start_idx, start_idx + num_empleados_este_turno)],
-                            }
-                            # Agregar los días de la semana como columnas
-                            for dia in range(dias_a_cubrir):
-                                data[f'Día {dia + 1}'] = ['Turno {}'.format(i + 1)] * num_empleados_este_turno
-                            
-                            df = pd.DataFrame(data)
-                            st.dataframe(df, hide_index=True, use_container_width=True)
-                            
+                            # Crear un DataFrame para la tabla del turno
+                            df_turno = pd.DataFrame(columns=['Operador'] + columnas_dias)
+
+                            # Rellenar el DataFrame con la programación
+                            for j in range(num_empleados_este_turno):
+                                idx_global = start_idx + j
+                                fila_data = { 'Operador': f"{cargo} {idx_global + 1}" }
+                                
+                                for dia in range(dias_a_programar):
+                                    # Lógica de rotación de descanso
+                                    # El grupo en descanso rota cada día
+                                    descanso_grupo_start = dia % personal_final_necesario
+                                    
+                                    # Verificar si el operador está en el grupo de descanso para ese día
+                                    is_on_break = False
+                                    for k in range(personas_descanso):
+                                        idx_descanso = (descanso_grupo_start + k) % personal_final_necesario
+                                        if idx_global == idx_descanso:
+                                            is_on_break = True
+                                            break
+                                    
+                                    if is_on_break:
+                                        fila_data[columnas_dias[dia]] = "Descanso"
+                                    else:
+                                        # Asignar turno rotativo a los que no están en descanso
+                                        turno_asignado_idx = (idx_global + dia) % cantidad_turnos
+                                        fila_data[columnas_dias[dia]] = f"Turno {turno_asignado_idx + 1}"
+
+                                # Añadir la fila al DataFrame
+                                df_turno.loc[len(df_turno)] = fila_data
+
+                            st.dataframe(df_turno, hide_index=True, use_container_width=True)
+
                             start_idx += num_empleados_este_turno
                         else:
                             st.info(f"No hay personal asignado para el Turno {i + 1}.")
