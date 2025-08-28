@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 st.title("🧮 CÁLCULO DE PERSONAL REQUERIDO Y PROGRAMACIÓN DE TURNOS")
-st.caption("Versión 2 – Cálculo + programación de operadores por turno.")
+st.caption("Versión 3 – Cálculo optimizado + programación básica de operadores por turno.")
 
 # -------------------- ENTRADAS --------------------
 col1, col2 = st.columns(2)
@@ -49,11 +49,12 @@ if factor_disponibilidad <= 0:
 
 horas_semana_ajustadas = horas_semana_requeridas / factor_disponibilidad
 
-# Personal base requerido
+# Personal base requerido (sin vacaciones)
 personal_requerido_base = horas_semana_ajustadas / horas_prom_bisem
 
-# Ajuste por vacaciones
-horas_vacaciones = personal_vacaciones * dias_vacaciones * horas_por_turno
+# Ajuste por vacaciones (más realista: carga laboral semanal promedio)
+horas_dia_promedio = horas_prom_bisem / dias_cubrir
+horas_vacaciones = personal_vacaciones * dias_vacaciones * horas_dia_promedio
 personal_requerido_vacaciones = horas_vacaciones / horas_prom_bisem
 
 # Total personal requerido
@@ -61,9 +62,29 @@ personal_total_requerido = math.ceil(personal_requerido_base + personal_requerid
 brecha = personal_total_requerido - personas_actuales
 
 # -------------------- RESULTADOS --------------------
-st.subheader("Resultados")
-st.metric("Personal total necesario", f"{personal_total_requerido}")
+st.subheader("📊 Resultados del cálculo")
 
+col_res1, col_res2, col_res3 = st.columns(3)
+col_res1.metric("Personal requerido (sin vacaciones)", f"{math.ceil(personal_requerido_base)}")
+col_res2.metric("Personal adicional por vacaciones", f"{math.ceil(personal_requerido_vacaciones)}")
+col_res3.metric("Total personal necesario", f"{personal_total_requerido}")
+
+st.metric("Brecha frente al personal actual", f"{brecha:+}")
+
+# -------------------- PROGRAMACIÓN DE TURNOS --------------------
 st.divider()
+st.subheader("📅 Programación mínima de turnos (cobertura)")
 
-#_________________________PROGRAMACIÓN DE TURNOS___________________________
+# Generar tabla con días y turnos
+dias = [f"Día {i+1}" for i in range(dias_cubrir)]
+turnos = [f"Turno {j+1}" for j in range(n_turnos_dia)]
+
+data = []
+for d in dias:
+    for t in turnos:
+        data.append([d, t, min_operadores_turno])
+
+df_turnos = pd.DataFrame(data, columns=["Día", "Turno", f"{cargo}s requeridos"])
+
+st.dataframe(df_turnos, use_container_width=True)
+
