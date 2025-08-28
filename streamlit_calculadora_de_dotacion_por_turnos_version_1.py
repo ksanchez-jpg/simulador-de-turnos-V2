@@ -65,8 +65,20 @@ if st.button("Calcular Personal Necesario y Turnos"):
                 else:
                     # --- Sección de Resultados ---
                     st.header("Resultados del Cálculo")
-                    st.metric(label="Personal Requerido para no generar horas extras", value=f"{personal_final_necesario} persona(s)")
-                    st.metric(label=f"Horas de trabajo totales requeridas a la semana para {cargo}", value=f"{horas_trabajo_totales_semanales} horas")
+                    
+                    # Usamos una columna para los resultados y otra para la explicación
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric(label="Personal Requerido para no generar horas extras", value=f"{personal_final_necesario} persona(s)")
+                        st.metric(label=f"Horas de trabajo totales requeridas a la semana para {cargo}", value=f"{horas_trabajo_totales_semanales} horas")
+                    with col2:
+                        st.markdown("---")
+                        st.markdown("**Cómo se calcula el personal requerido:**")
+                        st.markdown(f"1. **Horas totales:** `{dias_a_cubrir} (días) * {horas_operacion_diarias} (horas/día) * {operadores_por_turno} (op/turno) = {horas_trabajo_totales_semanales} (horas totales)`")
+                        st.markdown(f"2. **Personal teórico:** `{horas_trabajo_totales_semanales} (horas totales) / {horas_promedio_semanal} (horas/op) = {personal_teorico:.2f} (personal teórico)`")
+                        st.markdown(f"3. **Ajuste:** `({personal_teorico:.2f} / (1 - {ausentismo_porcentaje}/100)) + {personal_vacaciones} (vacaciones)`")
+                        st.markdown(f"4. **Resultado final:** `{round(personal_ajustado_ausentismo + personal_vacaciones)} (personal redondeado)`")
+                        st.markdown("---")
                     
                     # Mostrar la brecha de personal
                     if diferencia_personal > 0:
@@ -165,9 +177,6 @@ if st.button("Calcular Personal Necesario y Turnos"):
 
                         start_index_global = end_index_global
                     
-
-    except Exception as e:
-        st.error(f"Ha ocurrido un error en el cálculo. Por favor, revise los valores ingresados. Error: {e}") 
 
     except Exception as e:
         st.error(f"Ha ocurrido un error en el cálculo. Por favor, revise los valores ingresados. Error: {e}")
