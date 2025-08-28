@@ -62,64 +62,47 @@ st.divider()
 
 
 # -------------------- PROGRAMACIÓN DE TURNOS --------------------
+import streamlit as st
 import pandas as pd
 import random
-import streamlit as st
 
-# Parámetros (puedes conectar esto con tu cálculo de personal)
-num_operadores = 9  # ejemplo
-turnos = 3
-dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+st.title("📅 Programación Automática de Turnos")
 
-# Función para generar programación rotativa
-def generar_programacion(num_operadores, turnos, horas_turno="8h"):
-    operadores = [f"Op{i+1}" for i in range(num_operadores)]
-    random.shuffle(operadores)  # Para que no siempre descansen los mismos
+# Entradas del usuario
+tipo_turno = st.selectbox("Selecciona duración del turno", ["8H", "12H"])
+total_operadores = st.number_input("Número total de operadores", min_value=1, value=12)
+min_operadores = st.number_input("Mínimo de operadores por turno", min_value=1, value=3)
+num_semanas = st.number_input("Número de semanas a programar", min_value=1, value=2)
+
+# Calcular número de turnos posibles
+num_turnos = total_operadores // min_operadores
+st.write(f"Se pueden programar **{num_turnos} turnos** con al menos {min_operadores} operadores por turno")
+
+# Crear lista de operadores
+operadores = [f"Op{i+1}" for i in range(total_operadores)]
+
+# Dividir operadores en turnos
+turnos = [operadores[i::num_turnos] for i in range(num_turnos)]
+
+# Días y semanas
+dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+columnas = [f"{d} Sem{s+1}" for s in range(num_semanas) for d in dias]
+
+# Generar las tablas de turnos
+for t, grupo in enumerate(turnos, start=1):
+    data = []
+    for op in grupo:
+        fila = []
+        for c in columnas:
+            # Rotar descanso: probabilidad de descanso menor si hay pocos operadores
+            if random.random() < 1/len(grupo):
+                fila.append("Descanso")
+            else:
+                fila.append(tipo_turno)
+        data.append([op] + fila)
     
-    # Dividir operadores en turnos
-    operadores_turnos = [operadores[i::turnos] for i in range(turnos)]
+    df = pd.DataFrame(data, columns=["Operador"] + columnas)
     
-    tablas = {}
-    for t, ops in enumerate(operadores_turnos, start=1):
-        data = {"Operador": ops}
-        
-        # Semana 1 y Semana 2
-        for semana in [1, 2]:
-            for dia in dias_semana:
-                col = f"{dia} Sem{semana}"
-                valores = []
-                for op in ops:
-                    if horas_turno == "8h":
-                        if semana == 1:
-                            valores.append("8H") if random.random() > 0.15 else valores.append("Descanso")
-                        else:
-                            # Rotación: 3 días 8h + 1 día 12h
-                            if random.random() < 0.15:
-                                valores.append("12H")
-                            elif random.random() < 0.7:
-                                valores.append("8H")
-                            else:
-                                valores.append("Descanso")
-                    elif horas_turno == "12h":
-                        if semana == 1:
-                            valores.append("12H") if random.random() > 0.35 else valores.append("Descanso")
-                        else:
-                            valores.append("12H") if random.random() > 0.45 else valores.append("Descanso")
-                data[col] = valores
-        
-        tablas[f"Turno {t}"] = pd.DataFrame(data)
-    
-    return tablas
-
-# Streamlit UI
-st.title("📅 Programación de Turnos")
-
-tipo_turno = st.radio("Selecciona el tipo de turno:", ["8h", "12h"])
-
-tablas = generar_programacion(num_operadores, turnos, horas_turno=tipo_turno)
-
-# Mostrar cada turno en tablas separadas
-for turno, tabla in tablas.items():
-    st.subheader(turno)
-    st.dataframe(tabla, use_container_width=True)
+    st.subheader(f"Turno {t}")
+    st.dataframe(df)
 
