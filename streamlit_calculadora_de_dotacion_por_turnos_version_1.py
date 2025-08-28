@@ -60,47 +60,43 @@ st.metric("Brecha de personal (faltante)", f"{brecha}")
 
 st.divider()
 
-# -------------------- GENERACIÓN DE PROGRAMACIÓN --------------------
-st.subheader("📅 Programación de Turnos")
 
-dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-columnas = [f"{d} S1" for d in dias] + [f"{d} S2" for d in dias]
+# -------------------- PROGRAMACIÓN DE TURNOS --------------------
+st.subheader("📅 Programación automática de turnos")
 
-def generar_programacion(personal_total_requerido, config_turnos):
-    programaciones = {}
-    if "3 turnos" in config_turnos:
-        turnos = ["Turno 1", "Turno 2", "Turno 3"]
-        for turno in turnos:
-            data = {}
-            for p in range(1, personal_total_requerido+1):
-                fila = []
-                # Semana 1 → 6 días de 8h
-                fila.extend(["8H"]*6 + ["-"])
-                # Semana 2 → 3 días de 8h + 1 de 12h + 3 libres
-                fila.extend(["8H", "12H", "8H", "8H", "-", "-", "-"])
-                data[f"{cargo}{p}"] = fila
-            df = pd.DataFrame(data, index=columnas).T
-            programaciones[turno] = df
+# Lista de operadores calculados
+operadores = [f"{cargo} {i+1}" for i in range(personal_total_requerido)]
 
-    else:  # 2 turnos de 12h
-        turnos = ["Turno A", "Turno B"]
-        for turno in turnos:
-            data = {}
-            for p in range(1, personal_total_requerido+1):
-                fila = []
-                # Semana 1 → 4 días de 12h
-                fila.extend(["12H"]*4 + ["-"]*3)
-                # Semana 2 → 3 días de 12h
-                fila.extend(["12H"]*3 + ["-"]*4)
-                data[f"{cargo}{p}"] = fila
-            df = pd.DataFrame(data, index=columnas).T
-            programaciones[turno] = df
+# Días de la semana (dos semanas ejemplo)
+dias_semana = ["Lunes S1", "Martes S1", "Miércoles S1", "Jueves S1", "Viernes S1", "Sábado S1", "Domingo S1",
+               "Lunes S2", "Martes S2", "Miércoles S2", "Jueves S2", "Viernes S2", "Sábado S2", "Domingo S2"]
 
-    return programaciones
+# División de operadores por turno
+op_por_turno = personal_total_requerido // n_turnos_dia
+sobrantes = personal_total_requerido % n_turnos_dia  # si no es divisible exacto
 
-# Mostrar programación en tablas separadas
-programaciones = generar_programacion(personal_total_requerido, config_turnos)
+turnos_dict = {}
+for t in range(n_turnos_dia):
+    inicio = t * op_por_turno
+    fin = inicio + op_por_turno
+    if t == n_turnos_dia - 1:  # último turno se lleva los sobrantes
+        fin += sobrantes
+    turnos_dict[f"Turno {t+1}"] = operadores[inicio:fin]
 
-for turno, df in programaciones.items():
+# Asignación con descanso rotativo
+for turno, ops in turnos_dict.items():
+    data = {}
+    for i, op in enumerate(ops):
+        row = []
+        for d in range(len(dias_semana)):
+            # Selección rotativa: mínimo trabajan, resto descansan
+            if (i + d) % len(ops) < min_operadores_turno:
+                row.append("Trabajo")
+            else:
+                row.append("Descanso")
+        data[op] = row
+    df = pd.DataFrame(data, index=dias_semana).T
     st.write(f"### {turno}")
     st.dataframe(df, use_container_width=True)
+
+
