@@ -1,9 +1,23 @@
 import streamlit as st
 import math
 import pandas as pd
+import io
 
 # Establecer la configuración de la página para usar el ancho completo
 st.set_page_config(layout="wide")
+
+# Función para convertir múltiples DataFrames a un archivo Excel en memoria
+def to_excel(dfs_dict):
+    """
+    Convierte un diccionario de DataFrames en un archivo Excel con múltiples hojas.
+    """
+    output = io.BytesIO()
+    # Se usa xlsxwriter ya que es un motor comun, si falla, puede que necesites instalarlo con 'pip install xlsxwriter'
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        for sheet_name, df in dfs_dict.items():
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+    processed_data = output.getvalue()
+    return processed_data
 
 # Título de la aplicación
 st.title("Calculadora de Personal y Programación de Turnos")
@@ -54,10 +68,7 @@ def run_calculation(use_actual_personnel):
         personal_ajustado_ausentismo = personal_teorico / factor_ausentismo
         personal_final_necesario = round(personal_ajustado_ausentismo + personal_vacaciones)
 
-        if use_actual_personnel:
-            personal_a_usar = personal_actual
-        else:
-            personal_a_usar = personal_final_necesario
+        personal_a_usar = personal_actual if use_actual_personnel else personal_final_necesario
         
         # Validar que el personal necesario sea suficiente para cubrir los turnos
         if personal_a_usar < operadores_por_turno * cantidad_turnos:
@@ -106,6 +117,7 @@ def run_calculation(use_actual_personnel):
         base_empleados_por_turno = personal_a_usar // cantidad_turnos
         resto_empleados = personal_a_usar % cantidad_turnos
 
+        all_turnos_dfs = {}
         start_index_global = 0
         for i in range(cantidad_turnos):
             num_empleados_este_turno = base_empleados_por_turno + (1 if i < resto_empleados else 0)
@@ -139,18 +151,19 @@ def run_calculation(use_actual_personnel):
                 for j in range(num_empleados_este_turno):
                     global_op_idx = start_index_global + j
                     
-                    if use_actual_personnel:
+                    if use_actual_personnel and j in indices_descanso:
+                        dia_programacion.append("Descanso")
+                    elif use_actual_personnel:
                         dia_programacion.append(f"Turno {turno_base_idx + 1}")
                         horas_trabajadas_por_operador[global_op_idx] = horas_trabajadas_por_operador.get(global_op_idx, 0) + horas_por_turno
+                    elif horas_trabajadas_por_operador.get(global_op_idx, 0) >= horas_totales_por_operador:
+                        dia_programacion.append("Descanso")
                     else:
-                        if horas_trabajadas_por_operador.get(global_op_idx, 0) >= horas_totales_por_operador:
+                        if j in indices_descanso:
                             dia_programacion.append("Descanso")
                         else:
-                            if j in indices_descanso:
-                                dia_programacion.append("Descanso")
-                            else:
-                                dia_programacion.append(f"Turno {turno_base_idx + 1}")
-                                horas_trabajadas_por_operador[global_op_idx] = horas_trabajadas_por_operador.get(global_op_idx, 0) + horas_por_turno
+                            dia_programacion.append(f"Turno {turno_base_idx + 1}")
+                            horas_trabajadas_por_operador[global_op_idx] = horas_trabajadas_por_operador.get(global_op_idx, 0) + horas_por_turno
                 
                 df_turno[columna] = dia_programacion
 
@@ -162,15 +175,24 @@ def run_calculation(use_actual_personnel):
 
             st.dataframe(df_turno, hide_index=True, use_container_width=True)
 
+            all_turnos_dfs[f"Turno {i + 1}"] = df_turno
             start_index_global = end_index_global
-    
+
+        if all_turnos_dfs:
+            st.download_button(
+                label="Descargar Programación a Excel",
+                data=to_excel(all_turnos_dfs),
+                file_name='Programacion_Turnos.xlsx',
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+
     except Exception as e:
         st.error(f"Ha ocurrido un error en el cálculo. Por favor, revise los valores ingresados. Error: {e}")
 
 # --- Botones de Cálculo ---
 col1, col2 = st.columns(2)
 with col1:
-    if st.button("Calcular Personal Requerido y Turnos"):
+    if st.button("Calcular con Personal Requerido"):
         run_calculation(False)
 
 with col2:
