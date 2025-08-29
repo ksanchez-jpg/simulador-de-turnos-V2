@@ -1,7 +1,6 @@
 import streamlit as st
 import math
 import pandas as pd
-import io
 
 # Título de la aplicación
 st.title("Calculadora de Personal y Programación de Turnos")
@@ -101,7 +100,6 @@ def run_calculation(use_actual_personnel):
         base_empleados_por_turno = personal_a_usar // cantidad_turnos
         resto_empleados = personal_a_usar % cantidad_turnos
 
-        all_turnos_dfs = {}
         start_index_global = 0
         for i in range(cantidad_turnos):
             num_empleados_este_turno = base_empleados_por_turno + (1 if i < resto_empleados else 0)
@@ -161,15 +159,7 @@ def run_calculation(use_actual_personnel):
 
             all_turnos_dfs[f"Turno {i + 1}"] = df_turno
             start_index_global = end_index_global
-
-        if all_turnos_dfs:
-            st.download_button(
-                label="Descargar Programación a Excel",
-                data=to_excel(all_turnos_dfs),
-                file_name='Programacion_Turnos.xlsx',
-                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
-
+    
     except Exception as e:
         st.error(f"Ha ocurrido un error en el cálculo. Por favor, revise los valores ingresados. Error: {e}")
 
