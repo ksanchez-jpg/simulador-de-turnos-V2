@@ -2,6 +2,9 @@ import streamlit as st
 import math
 import pandas as pd
 
+# Establecer la configuración de la página para usar el ancho completo
+st.set_page_config(layout="wide")
+
 # Título de la aplicación
 st.title("Calculadora de Personal y Programación de Turnos")
 st.write("Ingrese los parámetros a continuación para calcular el personal necesario y generar la programación de turnos.")
