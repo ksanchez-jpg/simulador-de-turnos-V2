@@ -53,8 +53,6 @@ with col1:
 
 with col2:
     st.subheader("📐 Fórmulas usadas")
-# Fase 1: Cálculo de horas de operación y disponibilidad
-
 st.markdown("### 1. Horas de operación por semana")
 st.code("Operadores por turno × Turnos por día × Días por semana × Horas por turno")
 
