@@ -69,53 +69,52 @@ st.code("Horas de operación en 3 semanas ÷ Horas disponibles por operador en 3
 
 import streamlit as st
 import pandas as pd
-import random
 
-# --------------------------
-# Configuración inicial
-# --------------------------
-st.title("📅 Simulador de Programación de Turnos")
+# Título de la aplicación
+st.title("Simulador de Programación de Turnos")
+st.write("Seleccione el modelo de programación para visualizar los turnos.")
 
-# Número de operadores
-num_operadores = st.number_input("Ingrese el número de operadores:", min_value=1, value=10)
+# Selección del modelo
+modelo = st.radio("Seleccione el modelo de turnos:", ["Modelo 124 horas", "Modelo 128 horas"])
 
-# Selección de modelo
-modelo = st.radio("Seleccione el modelo de programación:", ["Modelo 124 horas", "Modelo 128 horas"])
+# Definir días
+dias = ["Lunes Sem1", "Martes Sem1", "Miércoles Sem1", "Jueves Sem1", "Viernes Sem1", "Sábado Sem1", "Domingo Sem1",
+        "Lunes Sem2", "Martes Sem2", "Miércoles Sem2", "Jueves Sem2", "Viernes Sem2", "Sábado Sem2", "Domingo Sem2",
+        "Lunes Sem3", "Martes Sem3", "Miércoles Sem3", "Jueves Sem3", "Viernes Sem3", "Sábado Sem3", "Domingo Sem3"]
 
-# --------------------------
-# Definición de turnos según modelo
-# --------------------------
+# Definir operadores
+operadores = [f"Operador {i+1}" for i in range(10)]
+
+# Función para generar programación
+def generar_programacion(modelo):
+    programacion = {op: [] for op in operadores}
+
+    if modelo == "Modelo 124 horas":
+        turnos = ["T1 (8h)", "T2 (8h)", "T3 (8h)", "T1 (12h)", "T2 (12h)"]
+        horas = {"T1 (8h)": 8, "T2 (8h)": 8, "T3 (8h)": 8, "T1 (12h)": 12, "T2 (12h)": 12}
+    else:  # Modelo 128 horas
+        turnos = ["T1 (8h)", "T2 (8h)", "T3 (8h)", "T1 (12h)", "T2 (12h)"]
+        horas = {"T1 (8h)": 8, "T2 (8h)": 8, "T3 (8h)": 8, "T1 (12h)": 12, "T2 (12h)": 12}
+
+    # Asignación de turnos cíclica
+    turno_idx = 0
+    for dia in dias:
+        for op in operadores:
+            turno = turnos[turno_idx % len(turnos)]
+            programacion[op].append(f"{turno}")
+            turno_idx += 1
+
+    df = pd.DataFrame.from_dict(programacion, orient="index", columns=dias)
+    return df
+
+# Mostrar la programación según modelo
 if modelo == "Modelo 124 horas":
-    turnos = ["T1 (8h)", "T2 (8h)", "T3 (8h)"]  # 3 turnos de 8h
-    dias_por_semana = 7
+    st.subheader("Programación - Modelo 124 horas")
+    programacion = generar_programacion("Modelo 124 horas")
+    st.dataframe(programacion)
+
 elif modelo == "Modelo 128 horas":
-    turnos = ["T1 (12h)", "T2 (12h)"]  # 2 turnos de 12h
-    dias_por_semana = 7
+    st.subheader("Programación - Modelo 128 horas")
+    programacion = generar_programacion("Modelo 128 horas")
+    st.dataframe(programacion)
 
-# --------------------------
-# Construcción de la grilla
-# --------------------------
-# Crear nombres de columnas: "Lunes S1", ..., "Domingo S3"
-dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-columnas = ["Operador"] + [f"{dia} S{sem}" for sem in range(1, 4) for dia in dias_semana]
-
-# Crear estructura vacía
-programacion = []
-
-for i in range(num_operadores):
-    fila = [f"Operador {i+1}"]  # primera columna
-    # asignar turnos aleatoriamente garantizando cobertura
-    for sem in range(3):  # 3 semanas
-        for d in range(dias_por_semana):
-            turno_asignado = random.choice(turnos)
-            fila.append(turno_asignado)
-    programacion.append(fila)
-
-# --------------------------
-# Mostrar en tabla
-# --------------------------
-df = pd.DataFrame(programacion, columns=columnas)
-st.dataframe(df, use_container_width=True)
-
-        st.subheader("Programación - Modelo 128 horas")
-        st.dataframe(df)
