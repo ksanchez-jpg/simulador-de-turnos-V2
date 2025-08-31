@@ -118,8 +118,7 @@ for modelo, horas in MODELOS.items():
     st.subheader(f"📊 Programación Modelo {modelo}")
     df_programacion = generar_programacion(modelo, horas)
     st.dataframe(df_programacion)
-
-        st.subheader("📊 Programación - 128 horas (12H)")
-        st.dataframe(df)
+st.subheader("📊 Programación - 128 horas (12H)")
+st.dataframe(df)
 
 
