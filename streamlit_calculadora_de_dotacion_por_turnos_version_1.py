@@ -14,7 +14,6 @@ operadores_turno = st.number_input("Cantidad de operadores requeridos por turno"
 turnos_dia = st.number_input("Cantidad de turnos por día", min_value=1, max_value=3, value=3, step=1)
 
 # === Cálculo de horas requeridas en la operación ===
-# Ejemplo: 6 operadores x 3 turnos x 7 días x 8h = horas totales de operación
 horas_operacion_semana = operadores_turno * turnos_dia * dias_semana * 8
 horas_operacion_periodo = horas_operacion_semana * 3   # periodo de 3 semanas
 
@@ -28,11 +27,46 @@ personal_necesario = math.ceil(horas_operacion_periodo / horas_disponibles_por_o
 # Ajuste por vacaciones
 personal_necesario += vacaciones
 
-# === Resultados ===
-st.subheader("Resultados del cálculo")
-st.write(f"**Horas totales de operación por semana:** {horas_operacion_semana}")
-st.write(f"**Horas totales de operación en 3 semanas:** {horas_operacion_periodo}")
-st.write(f"**Horas disponibles por operador en 3 semanas (ajustado por ausentismo):** {horas_disponibles_por_operador:.2f}")
-st.write(f"**Personal necesario (incluyendo vacaciones):** {personal_necesario}")
-st.write(f"**Personal actual:** {personal_actual}")
-st.write(f"**Diferencia:** {personal_necesario - personal_actual}")
+faltante = personal_necesario - personal_actual
+
+# === Layout en dos columnas ===
+col1, col2 = st.columns([2,1])
+
+with col1:
+    st.subheader("📊 Resultados del cálculo")
+
+    st.markdown(
+        f"""
+        <div style="font-size:24px; font-weight:bold; margin-bottom:10px;">
+            Personal necesario: {personal_necesario}  
+            &nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp; 
+            <span style="color:red;">Personal faltante: {faltante}</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.write(f"**Horas a cubrir por semana:** {horas_operacion_semana}")
+    st.write(f"**Horas a cubrir en 3 semanas:** {horas_operacion_periodo}")
+    st.write(f"**Horas disponibles por operador en 3 semanas (ajustado por ausentismo):** {horas_disponibles_por_operador:.2f}")
+    st.write(f"**Personal actual:** {personal_actual}")
+
+with col2:
+    st.subheader("📐 Fórmulas usadas")
+    st.markdown(
+        """
+        **1. Horas de operación por semana**  
+        \n`Operadores por turno × Turnos por día × Días por semana × 8`
+        
+        **2. Horas de operación en 3 semanas**  
+        \n`Horas de operación por semana × 3`
+
+        **3. Horas disponibles por operador en 3 semanas**  
+        \n`Horas semanales × 3 × (1 - Ausentismo)`
+
+        **4. Personal necesario**  
+        \n`Horas de operación en 3 semanas ÷ Horas disponibles por operador`
+        
+        **5. Ajuste por vacaciones**  
+        \n`Personal necesario + Personal de vacaciones`
+        """)
