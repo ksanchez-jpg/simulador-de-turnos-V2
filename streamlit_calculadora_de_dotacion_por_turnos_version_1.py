@@ -65,3 +65,70 @@ st.code("Horas promedio semanales × 3 × (1 - Porcentaje de ausentismo)")
 st.markdown("### 4. Número de operadores necesarios")
 st.code("Horas de operación en 3 semanas ÷ Horas disponibles por operador en 3 semanas")
 
+#PROGRAMACIÓN DE TURNOS
+
+import streamlit as st
+import pandas as pd
+import random
+
+# --- Función para generar programación ---
+def generar_programacion(num_operadores, horas_totales, turno):
+    """
+    Genera la programación de turnos
+    num_operadores: cantidad de operadores
+    horas_totales: horas a programar en 3 semanas
+    turno: "8H" o "12H"
+    """
+    dias = 21  # 3 semanas
+    operadores = [f"Operador {i+1}" for i in range(num_operadores)]
+    programacion = {op: [] for op in operadores}
+
+    # Determinar cuántos turnos equivalen a las horas necesarias
+    horas_turno = 8 if turno == "8H" else 12
+    turnos_necesarios = horas_totales // horas_turno
+
+    # Distribuir turnos equitativos
+    for op in operadores:
+        asignados = 0
+        for d in range(dias):
+            if asignados < turnos_necesarios and random.random() > 0.5:
+                programacion[op].append(f"T1 {turno}")
+                asignados += 1
+            else:
+                programacion[op].append("DESC")
+        # Si aún no completó los turnos, llenar al final
+        while asignados < turnos_necesarios:
+            for d in range(dias):
+                if programacion[op][d] == "DESC":
+                    programacion[op][d] = f"T1 {turno}"
+                    asignados += 1
+                    if asignados == turnos_necesarios:
+                        break
+
+    # Convertir a DataFrame
+    df = pd.DataFrame(programacion).T
+    df.columns = [f"Día {i+1}" for i in range(dias)]
+    return df
+
+# --- Interfaz Streamlit ---
+st.title("📅 Programación de Turnos (3 semanas)")
+st.write("Genera turnos de 8H o 12H, con horas equilibradas entre operadores.")
+
+# Parámetros de entrada
+num_operadores = st.number_input("Número de operadores", min_value=1, value=6)
+
+# Botones para generar programación
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("Generar con 124 horas (3 semanas)"):
+        df = generar_programacion(num_operadores, 124, "8H")
+        st.subheader("📊 Programación - 124 horas (8H)")
+        st.dataframe(df)
+
+with col2:
+    if st.button("Generar con 128 horas (3 semanas)"):
+        df = generar_programacion(num_operadores, 128, "12H")
+        st.subheader("📊 Programación - 128 horas (12H)")
+        st.dataframe(df)
+
+
