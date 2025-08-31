@@ -52,6 +52,7 @@ with col1:
     st.write(f"**Personal actual:** {personal_actual}")
 
 with col2:
+    st.subheader("📊 Formulas Utilizadas")
 st.markdown("### 1. Horas de operación por semana")
 st.code("Operadores por turno × Turnos por día × Días por semana × Horas por turno")
 
