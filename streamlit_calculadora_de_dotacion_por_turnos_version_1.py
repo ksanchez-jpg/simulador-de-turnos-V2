@@ -53,20 +53,17 @@ with col1:
 
 with col2:
     st.subheader("📐 Fórmulas usadas")
-    st.markdown(
-        """
-        **1. Horas de operación por semana**  
-        \n`Operadores por turno × Turnos por día × Días por semana × 8`
-        
-        **2. Horas de operación en 3 semanas**  
-        \n`Horas de operación por semana × 3`
+# Fase 1: Cálculo de horas de operación y disponibilidad
 
-        **3. Horas disponibles por operador en 3 semanas**  
-        \n`Horas semanales × 3 × (1 - Ausentismo)`
+st.markdown("### 1. Horas de operación por semana")
+st.code("Operadores por turno × Turnos por día × Días por semana × Horas por turno")
 
-        **4. Personal necesario**  
-        \n`Horas de operación en 3 semanas ÷ Horas disponibles por operador`
-        
-        **5. Ajuste por vacaciones**  
-        \n`Personal necesario + Personal de vacaciones`
-        """)
+st.markdown("### 2. Horas de operación en 3 semanas")
+st.code("Horas de operación por semana × 3")
+
+st.markdown("### 3. Horas disponibles por operador en 3 semanas")
+st.code("Horas promedio semanales × 3 × (1 - Porcentaje de ausentismo)")
+
+st.markdown("### 4. Número de operadores necesarios")
+st.code("Horas de operación en 3 semanas ÷ Horas disponibles por operador en 3 semanas")
+
