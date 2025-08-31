@@ -71,50 +71,51 @@ import streamlit as st
 import pandas as pd
 import random
 
-st.title("Programación de Turnos")
-st.write("Seleccione el modelo de programación que desea generar:")
+# --------------------------
+# Configuración inicial
+# --------------------------
+st.title("📅 Simulador de Programación de Turnos")
 
-# Parámetros generales
-operadores = ["Operador " + str(i+1) for i in range(20)]
+# Número de operadores
+num_operadores = st.number_input("Ingrese el número de operadores:", min_value=1, value=10)
+
+# Selección de modelo
+modelo = st.radio("Seleccione el modelo de programación:", ["Modelo 124 horas", "Modelo 128 horas"])
+
+# --------------------------
+# Definición de turnos según modelo
+# --------------------------
+if modelo == "Modelo 124 horas":
+    turnos = ["T1 (8h)", "T2 (8h)", "T3 (8h)"]  # 3 turnos de 8h
+    dias_por_semana = 7
+elif modelo == "Modelo 128 horas":
+    turnos = ["T1 (12h)", "T2 (12h)"]  # 2 turnos de 12h
+    dias_por_semana = 7
+
+# --------------------------
+# Construcción de la grilla
+# --------------------------
+# Crear nombres de columnas: "Lunes S1", ..., "Domingo S3"
 dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+columnas = ["Operador"] + [f"{dia} S{sem}" for sem in range(1, 4) for dia in dias_semana]
 
-# Función para generar turnos
-def generar_programacion(modelo):
-    programacion = []
+# Crear estructura vacía
+programacion = []
 
-    for semana in range(3):  # 3 semanas
-        for dia in dias_semana:
-            # Definir turnos según modelo
-            if modelo == "124":
-                turnos = ["Turno 1 (8H)", "Turno 2 (8H)", "Turno 3 (8H)", "Turno 4 (12H)"]
-            elif modelo == "128":
-                turnos = ["Turno 1 (12H)", "Turno 2 (12H)"]
+for i in range(num_operadores):
+    fila = [f"Operador {i+1}"]  # primera columna
+    # asignar turnos aleatoriamente garantizando cobertura
+    for sem in range(3):  # 3 semanas
+        for d in range(dias_por_semana):
+            turno_asignado = random.choice(turnos)
+            fila.append(turno_asignado)
+    programacion.append(fila)
 
-            for turno in turnos:
-                # Seleccionar operadores de forma balanceada
-                asignados = random.sample(operadores, 3)
-                for op in asignados:
-                    programacion.append({
-                        "Semana": semana+1,
-                        "Día": dia,
-                        "Turno": turno,
-                        "Operador": op
-                    })
+# --------------------------
+# Mostrar en tabla
+# --------------------------
+df = pd.DataFrame(programacion, columns=columnas)
+st.dataframe(df, use_container_width=True)
 
-    df = pd.DataFrame(programacion)
-    return df
-
-# Botones de selección
-col1, col2 = st.columns(2)
-
-with col1:
-    if st.button("Modelo 124 horas"):
-        df = generar_programacion("124")
-        st.subheader("Programación - Modelo 124 horas")
-        st.dataframe(df)
-
-with col2:
-    if st.button("Modelo 128 horas"):
-        df = generar_programacion("128")
         st.subheader("Programación - Modelo 128 horas")
         st.dataframe(df)
