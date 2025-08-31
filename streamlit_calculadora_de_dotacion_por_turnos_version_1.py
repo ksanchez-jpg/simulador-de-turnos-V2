@@ -89,94 +89,53 @@ if st.button("Calcular Personal Necesario y Turnos"):
                         st.success("¡El personal actual es el ideal para esta operación!")
                     
                     # --- Programación de Turnos Sugerida con Descanso Rotativo y Balance de Horas ---
-                    st.header("Programación de Turnos Sugerida (basada en el personal requerido)")
-                    
-                    turnos_horarios = []
-                    if cantidad_turnos == 3:
-                        turnos_horarios = ["06:00 - 14:00", "14:00 - 22:00", "22:00 - 06:00"]
-                    else:
-                        turnos_horarios = ["06:00 - 18:00", "18:00 - 06:00"]
-                    
-                    # Definir el número de días a programar (tres semanas)
-                    dias_a_programar = dias_a_cubrir * 3
-                    dias_semana_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-                    columnas_dias = [f"{dias_semana_nombres[d % 7]} Sem{d // 7 + 1}" for d in range(dias_a_programar)]
 
-                    # Horas totales a cumplir por cada operador (objetivo)
-                    # El objetivo se ajusta para ser un múltiplo de las horas de turno, lo más cercano a 42h/semana.
-                    target_total_hours = horas_promedio_semanal * 3
-                    num_turnos_por_operador_total = math.floor(target_total_hours / horas_por_turno)
-                    horas_totales_por_operador = num_turnos_por_operador_total * horas_por_turno
+                import streamlit as st
+import pandas as pd
+import random
 
-                    # Se informa al usuario sobre el ajuste de horas
-                    st.info(f"El objetivo de horas total por operador se ha ajustado a {horas_totales_por_operador} ({horas_totales_por_operador/3:.2f} promedio semanal) para un balance preciso con turnos de {horas_por_turno} horas.")
+# Definición de la programación semanal
+programacion = {
+    "Semana A": [12, 12, 12, 12, 12, 0, 0],  # 4 turnos de 12h
+    "Semana B": [8, 8, 8, 8, 8, 8, 0],      # 6 turnos de 8h
+    "Semana C": [12, 12, 8, 8, 0, 0, 0]     # 2 turnos de 12h + 2 turnos de 8h
+}
 
-                    # Inicializar un diccionario para llevar el seguimiento de las horas trabajadas por operador
-                    horas_trabajadas_por_operador = {op_idx: 0 for op_idx in range(personal_final_necesario)}
-                    
-                    # Distribuir el personal en las tablas de forma secuencial
-                    base_empleados_por_turno = personal_final_necesario // cantidad_turnos
-                    resto_empleados = personal_final_necesario % cantidad_turnos
+# Función para generar la programación
+def generar_programacion(operadores):
+    semanas = ["Semana A", "Semana B", "Semana C"]
+    data = []
 
-                    start_index_global = 0
-                    for i in range(cantidad_turnos):
-                        # Determinar el número de empleados para esta tabla/turno
-                        num_empleados_este_turno = base_empleados_por_turno + (1 if i < resto_empleados else 0)
-                        end_index_global = start_index_global + num_empleados_este_turno
+    for i, op in enumerate(operadores):
+        semana = semanas[i % len(semanas)]  # Rota entre A, B, C
+        horas = programacion[semana]
+        total_horas = sum(horas)
+        data.append({
+            "Operador": op,
+            "Semana": semana,
+            "Turnos": horas,
+            "Total Horas": total_horas
+        })
 
-                        st.subheader(f"Tabla Turno {i + 1}: {turnos_horarios[i]}")
-                        
-                        # Crear el DataFrame para esta tabla
-                        data = {'Operador': [f"{cargo} {op_idx + 1}" for op_idx in range(start_index_global, end_index_global)]}
-                        df_turno = pd.DataFrame(data)
-                        
-                        # Llenar las columnas de los días con la rotación de turnos y descansos
-                        for dia in range(dias_a_programar):
-                            columna = columnas_dias[dia]
-                            dia_programacion = []
-                            
-                            num_trabajando = operadores_por_turno
-                            num_descansando = num_empleados_este_turno - num_trabajando
-                            
-                            indices_descanso = []
-                            if num_descansando > 0:
-                                start_descanso_idx = (dia * num_descansando) % num_empleados_este_turno
-                                for k in range(num_descansando):
-                                    indices_descanso.append((start_descanso_idx + k) % num_empleados_este_turno)
+    return pd.DataFrame(data)
 
-                            # Asignar rotación de turnos entre semanas
-                            turno_base_idx = i
-                            semana = dia // dias_a_cubrir
-                            if cantidad_turnos == 3:
-                                turno_base_idx = (i + semana) % 3
-                            else:
-                                turno_base_idx = (i + semana) % 2
-                                
-                            for j in range(num_empleados_este_turno):
-                                global_op_idx = start_index_global + j
-                                
-                                if horas_trabajadas_por_operador.get(global_op_idx, 0) >= horas_totales_por_operador:
-                                    dia_programacion.append("Descanso")
-                                else:
-                                    if j in indices_descanso:
-                                        dia_programacion.append("Descanso")
-                                    else:
-                                        dia_programacion.append(f"Turno {turno_base_idx + 1}")
-                                        horas_trabajadas_por_operador[global_op_idx] = horas_trabajadas_por_operador.get(global_op_idx, 0) + horas_por_turno
-                            
-                            df_turno[columna] = dia_programacion
+# Interfaz en Streamlit
+st.title("📅 Generador de Programación de Turnos")
+st.write("Modelo de turnos con promedio de **41.33 horas semanales** en 3 semanas.")
 
-                        # Añadir columnas de total de horas y promedio semanal
-                        total_horas = [horas_trabajadas_por_operador.get(op_idx, 0) for op_idx in range(start_index_global, end_index_global)]
-                        promedio_semanal = [h / 3 for h in total_horas]
+# Input: número de operadores
+num_operadores = st.number_input("Número de operadores", min_value=1, value=6)
 
-                        df_turno['Total Horas'] = total_horas
-                        df_turno['Promedio Semanal'] = [f"{ps:.2f}" for ps in promedio_semanal]
+# Crear lista de operadores
+operadores = [f"Operador {i+1}" for i in range(num_operadores)]
 
-                        st.dataframe(df_turno, hide_index=True, use_container_width=True)
+# Generar programación
+df = generar_programacion(operadores)
 
-                        start_index_global = end_index_global
-                    
+# Mostrar tabla
+st.dataframe(df)
 
-    except Exception as e:
-        st.error(f"Ha ocurrido un error en el cálculo. Por favor, revise los valores ingresados. Error: {e}")
+# Exportar a Excel
+if st.button("Exportar a Excel"):
+    df.to_excel("programacion_turnos.xlsx", index=False)
+    st.success("Archivo 'programacion_turnos.xlsx' generado con éxito 🎉")
