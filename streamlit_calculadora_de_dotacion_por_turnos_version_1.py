@@ -69,56 +69,52 @@ st.code("Horas de operación en 3 semanas ÷ Horas disponibles por operador en 3
 
 import streamlit as st
 import pandas as pd
-import math
+import random
 
-st.title("📅 Programación de Turnos - Modelo A y Modelo B")
+st.title("Programación de Turnos")
+st.write("Seleccione el modelo de programación que desea generar:")
 
-# Entradas del usuario
-num_operadores = st.number_input("Ingrese el número total de operadores disponibles:", min_value=1, value=12)
-horas_turno = st.selectbox("Seleccione la duración del turno:", [8, 12])
-operadores_por_turno = st.number_input("Ingrese el número de operadores por turno:", min_value=1, value=4)
+# Parámetros generales
+operadores = ["Operador " + str(i+1) for i in range(20)]
+dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
-# Definimos número de turnos por día según duración del turno
-if horas_turno == 8:
-    turnos_por_dia = 3
-else:
-    turnos_por_dia = 2
-
-st.write(f"👉 Con turnos de **{horas_turno} horas**, hay **{turnos_por_dia} turnos por día**.")
-
-# Modelos de horas totales
-MODELOS = {
-    "A": 124,  # en 3 semanas
-    "B": 128   # en 3 semanas
-}
-
-# Generar programación
-def generar_programacion(modelo, horas_totales):
-    dias = 21  # 3 semanas
+# Función para generar turnos
+def generar_programacion(modelo):
     programacion = []
-    
-    # Calcular cuántos turnos necesita cada operador
-    turnos_por_operador = horas_totales / horas_turno
-    
-    st.write(f"📌 **Modelo {modelo}**: Cada operador debe trabajar {horas_totales} horas en 3 semanas → {turnos_por_operador:.2f} turnos.")
-    
-    turno_id = 0
-    for dia in range(1, dias+1):
-        for turno in range(1, turnos_por_dia+1):
-            for op in range(operadores_por_turno):
-                operador_asignado = (turno_id % num_operadores) + 1
-                programacion.append([f"Día {dia}", f"Turno {turno}", f"Operador {operador_asignado}"])
-                turno_id += 1
-    
-    df = pd.DataFrame(programacion, columns=["Día", "Turno", "Operador"])
+
+    for semana in range(3):  # 3 semanas
+        for dia in dias_semana:
+            # Definir turnos según modelo
+            if modelo == "124":
+                turnos = ["Turno 1 (8H)", "Turno 2 (8H)", "Turno 3 (8H)", "Turno 4 (12H)"]
+            elif modelo == "128":
+                turnos = ["Turno 1 (12H)", "Turno 2 (12H)"]
+
+            for turno in turnos:
+                # Seleccionar operadores de forma balanceada
+                asignados = random.sample(operadores, 3)
+                for op in asignados:
+                    programacion.append({
+                        "Semana": semana+1,
+                        "Día": dia,
+                        "Turno": turno,
+                        "Operador": op
+                    })
+
+    df = pd.DataFrame(programacion)
     return df
 
-# Mostrar resultados
-for modelo, horas in MODELOS.items():
-    st.subheader(f"📊 Programación Modelo {modelo}")
-    df_programacion = generar_programacion(modelo, horas)
-    st.dataframe(df_programacion)
-st.subheader("📊 Programación - 128 horas (12H)")
-st.dataframe(df)
+# Botones de selección
+col1, col2 = st.columns(2)
 
+with col1:
+    if st.button("Modelo 124 horas"):
+        df = generar_programacion("124")
+        st.subheader("Programación - Modelo 124 horas")
+        st.dataframe(df)
 
+with col2:
+    if st.button("Modelo 128 horas"):
+        df = generar_programacion("128")
+        st.subheader("Programación - Modelo 128 horas")
+        st.dataframe(df)
