@@ -38,19 +38,24 @@ with col1:
 with col2:
     personas_actuales = st.number_input("Total de personas actuales en el cargo", min_value=0, value=0, step=1)
     dias_cubrir = st.number_input("Días a cubrir en la semana", 1, 7, 7, step=1)
-    min_operadores_turno = st.number_input("Cantidad mínima de operadores por turno", 1, value=6, step=1)
-    
-    st.write("---")
-    st.subheader("Configuración de Turnos por Día")
-    dias_con_turno_12h = st.number_input("Días con turnos de 12 horas", min_value=0, max_value=dias_cubrir, value=2, step=1)
-    dias_con_turno_8h = dias_cubrir - dias_con_turno_12h
-    st.write(f"Días con turnos de 8 horas: {dias_con_turno_8h}")
+    config_turnos = st.selectbox(
+        "Configuración de turnos",
+        ("3 turnos de 8 horas", "2 turnos de 12 horas", "4 turnos de 6 horas"),
+    )
+    dias_vacaciones = st.number_input("Días de vacaciones", min_value=0, value=0, step=1)
+
+min_operadores_turno = st.number_input("Cantidad mínima de operadores por turno", 1, value=3, step=1)
+
+# ---- Configuración de turnos ----
+if "3 turnos" in config_turnos:
+    n_turnos_dia, horas_por_turno = 3, 8
+elif "2 turnos" in config_turnos:
+    n_turnos_dia, horas_por_turno = 2, 12
+else:
+    n_turnos_dia, horas_por_turno = 4, 6
 
 # ---- Cálculos ----
-horas_requeridas_12h = dias_con_turno_12h * 2 * 12 * min_operadores_turno
-horas_requeridas_8h = dias_con_turno_8h * 3 * 8 * min_operadores_turno
-
-horas_semana_requeridas = horas_requeridas_12h + horas_requeridas_8h
+horas_semana_requeridas = dias_cubrir * n_turnos_dia * horas_por_turno * min_operadores_turno
 factor_disponibilidad = 1.0 - (ausentismo_pct / 100.0)
 if factor_disponibilidad <= 0:
     st.error("El % de ausentismo no puede ser 100% o más.")
@@ -58,9 +63,17 @@ if factor_disponibilidad <= 0:
 
 horas_semana_ajustadas = horas_semana_requeridas / factor_disponibilidad
 
+# Personal base requerido
 personal_requerido_base = horas_semana_ajustadas / horas_prom_trisem
-horas_vacaciones = personal_vacaciones * dias_vacaciones * 8 # Asumiendo 8h/dia
+
+# Ajuste por vacaciones
+if dias_vacaciones is not None:
+    horas_vacaciones = personal_vacaciones * dias_vacaciones * 8
+else:
+    horas_vacaciones = 0
 personal_requerido_vacaciones = horas_vacaciones / horas_prom_trisem
+
+# Total personal requerido
 personal_total_requerido = math.ceil(personal_requerido_base + personal_requerido_vacaciones)
 
 brecha = personal_total_requerido - personas_actuales
@@ -79,9 +92,8 @@ with c1:
     st.markdown("### Resumen de supuestos")
     st.write(
         f"**Cargo:** {cargo}\n\n"
+        f"**Esquema de turnos:** {config_turnos} (# turnos/día = {n_turnos_dia}, horas/turno = {horas_por_turno})\n\n"
         f"**Días a cubrir/semana:** {dias_cubrir}\n\n"
-        f"**Días con turnos de 12h:** {dias_con_turno_12h} (2 turnos)\n\n"
-        f"**Días con turnos de 8h:** {dias_con_turno_8h} (3 turnos)\n\n"
         f"**Mín. operadores por turno:** {min_operadores_turno}\n\n"
         f"**% Ausentismo:** {ausentismo_pct:.1f}%\n\n"
         f"**Horas promedio/semana por trabajador (trisemanal):** {horas_prom_trisem}\n\n"
@@ -114,8 +126,9 @@ payload = {
     "horas_prom_semana_trisem": horas_prom_trisem,
     "personas_actuales": personas_actuales,
     "dias_cubrir_semana": dias_cubrir,
-    "dias_12h": dias_con_turno_12h,
-    "dias_8h": dias_con_turno_8h,
+    "config_turnos": config_turnos,
+    "n_turnos_dia": n_turnos_dia,
+    "horas_por_turno": horas_por_turno,
     "min_operadores_por_turno": min_operadores_turno,
     "personal_vacaciones": personal_vacaciones,
     "dias_vacaciones": dias_vacaciones,
@@ -143,6 +156,12 @@ def weekly_days_pattern(horas_turno:int):
     else: # 6 hours
         return [7, 7, 7, 7]
 
+def check_trisem_42(hours_weeks, horas_turno):
+    tol = horas_turno
+    ok13 = abs(sum(hours_weeks[0:3]) - 126) <= tol
+    ok24 = abs(sum(hours_weeks[1:4]) - 126) <= tol
+    return ok13 and ok24, (sum(hours_weeks[0:3]) - 126, sum(hours_weeks[1:4]) - 126)
+
 st.write("---")
 st.header("3. Programación de Turnos (4 Semanas)")
 
@@ -160,47 +179,49 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
     
     operator_schedules = {op_id: [""] * 28 for op_id in all_operators}
     
+    work_days_patterns = weekly_days_pattern(horas_por_turno)
     day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     
-    # NEW LOGIC: Determine which days have 12h shifts and which have 8h shifts
-    shift_duration_per_day = {}
-    twelve_hour_shift_days = ['Turno 1 (12h)', 'Turno 2 (12h)']
-    eight_hour_shift_days = ['Turno 1 (8h)', 'Turno 2 (8h)', 'Turno 3 (8h)']
-
-    for day_idx in range(dias_con_turno_12h):
-        shift_duration_per_day[day_names[day_idx]] = {'hours': 12, 'shifts': 2}
-    for day_idx in range(dias_con_turno_12h, dias_cubrir):
-        shift_duration_per_day[day_names[day_idx]] = {'hours': 8, 'shifts': 3}
-
     for op_idx, op_id in enumerate(all_operators):
-        current_shift_rotation = op_idx % 3
+        current_shift_rotation = op_idx % n_turnos_dia
         stagger_offset = op_idx % 7
         
         for week in range(4):
+            days_to_work = work_days_patterns[week]
+            
+            rest_before_change = False
+            if week > 0:
+                prev_week_last_day_status = operator_schedules[op_id][(week-1)*7+6]
+                if prev_week_last_day_status != "DESCANSA":
+                    rest_before_change = True
+
             for day_idx in range(7):
                 global_day_index = week * 7 + day_idx
-                day_name = day_names[day_idx]
-
-                if day_idx >= dias_cubrir:
+                
+                if rest_before_change and day_idx == 0:
                     operator_schedules[op_id][global_day_index] = "DESCANSA"
                     continue
                 
-                hours_per_shift_for_day = shift_duration_per_day[day_name]['hours']
-                shifts_per_day = shift_duration_per_day[day_name]['shifts']
+                day_in_rotation = (day_idx + stagger_offset) % 7
                 
-                assigned_shift = f"Turno {((op_idx + week) % shifts_per_day) + 1} ({hours_per_shift_for_day}h)"
-                
-                operator_schedules[op_id][global_day_index] = assigned_shift
+                if day_in_rotation < days_to_work:
+                    assigned_shift = f"Turno {((week + current_shift_rotation) % n_turnos_dia) + 1}"
+                    operator_schedules[op_id][global_day_index] = assigned_shift
+                else:
+                    operator_schedules[op_id][global_day_index] = "DESCANSA"
 
     all_schedules_data = {}
 
-    operators_per_shift_group = [math.floor(personal_total_requerido / 3)] * 3
-    remainder = personal_total_requerido % 3
+    operators_per_shift_group = [math.floor(personal_total_requerido / n_turnos_dia)] * n_turnos_dia
+    remainder = personal_total_requerido % n_turnos_dia
     if remainder > 0:
-        operators_per_shift_group[1] += remainder
+        if n_turnos_dia >= 2:
+            operators_per_shift_group[1] += remainder
+        else:
+            operators_per_shift_group[0] += remainder
 
     op_start_index = 0
-    for shift_index in range(3):
+    for shift_index in range(n_turnos_dia):
         shift_name = f"Turno {shift_index+1}"
         num_ops_in_group = operators_per_shift_group[shift_index]
         
@@ -208,8 +229,14 @@ if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
         
         current_shift_schedule_data = {}
         for op_id in group_operators:
-            current_shift_schedule_data[op_id] = operator_schedules[op_id]
-
+            op_schedule_for_this_shift = []
+            for day_schedule in operator_schedules[op_id]:
+                if day_schedule == shift_name:
+                    op_schedule_for_this_shift.append(shift_name)
+                else:
+                    op_schedule_for_this_shift.append("DESCANSA" if day_schedule == "DESCANSA" else "-")
+            current_shift_schedule_data[op_id] = op_schedule_for_this_shift
+            
         df_shift = pd.DataFrame(current_shift_schedule_data, index=[f"Semana {w+1} | {day}" for w in range(4) for day in day_names]).T
         
         st.subheader(f"Programación para {shift_name} | Operadores: {num_ops_in_group}")
