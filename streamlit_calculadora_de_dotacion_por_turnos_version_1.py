@@ -146,119 +146,74 @@ st.download_button(
 
 # ---
 # Lógica de programación de turnos
-# ---
+import streamlit as st
+import pandas as pd
+import itertools
 
-def weekly_days_pattern(horas_turno:int):
-    if horas_turno == 12:
-        return [4, 3, 4, 3]
-    elif horas_turno == 8:
-        return [6, 5, 5, 5]
-    else: # 6 hours
-        return [7, 7, 7, 7]
+# ------------------- CONFIGURACIÓN ------------------- #
+st.title("Generador de Programación de Turnos")
 
-def check_trisem_42(hours_weeks, horas_turno):
-    tol = horas_turno
-    ok13 = abs(sum(hours_weeks[0:3]) - 126) <= tol
-    ok24 = abs(sum(hours_weeks[1:4]) - 126) <= tol
-    return ok13 and ok24, (sum(hours_weeks[0:3]) - 126, sum(hours_weeks[1:4]) - 126)
+# Entradas del usuario
+num_operadores = st.number_input("Número total de operadores", min_value=1, value=26)
+operadores_por_turno = st.number_input("Operadores por turno", min_value=1, value=6)
+modelo = st.radio("Modelo de turnos", ["128 horas (8h)", "124 horas (12h)"])
+num_semanas = st.number_input("Número de semanas a programar", min_value=1, value=3)
 
-st.write("---")
-st.header("3. Programación de Turnos (4 Semanas)")
+# Definir estructura de turnos según modelo
+if modelo == "128 horas (8h)":
+    turnos = ["T1 (8h)", "T2 (8h)", "T3 (8h)"]
+    horas_turno = 8
+else:
+    turnos = ["T1 (12h)", "T2 (12h)"]
+    horas_turno = 12
 
-if st.button("Generar Programación de Turnos", key='generate_schedule_btn'):
-    
-    all_operators = []
-    for i in range(personas_actuales):
-        all_operators.append(f"OP-{i+1}")
-    for i in range(personal_total_requerido - personas_actuales):
-        all_operators.append(f"OP-AD-{i+1}")
-    
-    if not all_operators:
-        st.warning("No se puede generar la programación sin personal. Por favor, ajusta los valores de entrada.")
-        st.stop()
-    
-    operator_schedules = {op_id: [""] * 28 for op_id in all_operators}
-    
-    work_days_patterns = weekly_days_pattern(horas_por_turno)
-    day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-    
-    for op_idx, op_id in enumerate(all_operators):
-        current_shift_rotation = op_idx % n_turnos_dia
-        stagger_offset = op_idx % 7
-        
-        for week in range(4):
-            days_to_work = work_days_patterns[week]
-            
-            rest_before_change = False
-            if week > 0:
-                prev_week_last_day_status = operator_schedules[op_id][(week-1)*7+6]
-                if prev_week_last_day_status != "DESCANSA":
-                    rest_before_change = True
+# Días a programar
+semanas = [f"Semana {i+1}" for i in range(num_semanas)]
+dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
-            for day_idx in range(7):
-                global_day_index = week * 7 + day_idx
-                
-                if rest_before_change and day_idx == 0:
-                    operator_schedules[op_id][global_day_index] = "DESCANSA"
-                    continue
-                
-                day_in_rotation = (day_idx + stagger_offset) % 7
-                
-                if day_in_rotation < days_to_work:
-                    assigned_shift = f"Turno {((week + current_shift_rotation) % n_turnos_dia) + 1}"
-                    operator_schedules[op_id][global_day_index] = assigned_shift
-                else:
-                    operator_schedules[op_id][global_day_index] = "DESCANSA"
+# Crear lista de operadores
+operadores = [f"Op{i+1}" for i in range(num_operadores)]
 
-    all_schedules_data = {}
+# Total de slots de trabajo a cubrir
+slots_totales = num_semanas * len(dias) * len(turnos) * operadores_por_turno
 
-    operators_per_shift_group = [math.floor(personal_total_requerido / n_turnos_dia)] * n_turnos_dia
-    remainder = personal_total_requerido % n_turnos_dia
-    if remainder > 0:
-        if n_turnos_dia >= 2:
-            operators_per_shift_group[1] += remainder
-        else:
-            operators_per_shift_group[0] += remainder
+# Generar lista de asignaciones equitativas (rotación)
+asignaciones = list(itertools.cycle(operadores))[:slots_totales]
 
-    op_start_index = 0
-    for shift_index in range(n_turnos_dia):
-        shift_name = f"Turno {shift_index+1}"
-        num_ops_in_group = operators_per_shift_group[shift_index]
-        
-        group_operators = all_operators[op_start_index:op_start_index + num_ops_in_group]
-        
-        current_shift_schedule_data = {}
-        for op_id in group_operators:
-            op_schedule_for_this_shift = []
-            for day_schedule in operator_schedules[op_id]:
-                if day_schedule == shift_name:
-                    op_schedule_for_this_shift.append(shift_name)
-                else:
-                    op_schedule_for_this_shift.append("DESCANSA" if day_schedule == "DESCANSA" else "-")
-            current_shift_schedule_data[op_id] = op_schedule_for_this_shift
-            
-        df_shift = pd.DataFrame(current_shift_schedule_data, index=[f"Semana {w+1} | {day}" for w in range(4) for day in day_names]).T
-        
-        st.subheader(f"Programación para {shift_name} | Operadores: {num_ops_in_group}")
-        st.dataframe(df_shift)
-        all_schedules_data[shift_name] = df_shift
-        
-        op_start_index += num_ops_in_group
+# DataFrame vacío para la programación
+columnas = []
+for s in semanas:
+    for d in dias:
+        columnas.append(f"{d} {s}")
+programacion = pd.DataFrame(index=operadores, columns=columnas)
 
-    st.write("---")
-    st.subheader("Descargar Programación Completa")
-    st.write("Haz clic en el botón para descargar la programación de todos los turnos en un archivo de Excel.")
+# Llenar programación con rotación equitativa
+indice_asig = 0
+for s in semanas:
+    for d in dias:
+        for t in turnos:
+            asignados = asignaciones[indice_asig:indice_asig+operadores_por_turno]
+            indice_asig += operadores_por_turno
+            for op in asignados:
+                if pd.isna(programacion.loc[op, f"{d} {s}"]):
+                    programacion.loc[op, f"{d} {s}"] = t
 
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        for shift_name, df_shift in all_schedules_data.items():
-            df_shift.to_excel(writer, sheet_name=shift_name)
-    
-    output.seek(0)
+# Llenar descansos donde no se asignó turno
+programacion = programacion.fillna("Descanso")
 
-    st.download_button(
-        label="Descargar Horario a Excel",
-        data=output,
-        file_name='programacion_turnos.xlsx',
-        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
+# Calcular total de horas trabajadas
+programacion["Total Horas"] = programacion.apply(
+    lambda row: sum([horas_turno for v in row[:-1] if v != "Descanso"]), axis=1
+)
+
+# Mostrar resultados
+st.subheader("Programación de Turnos")
+st.dataframe(programacion)
+
+# Descargar en Excel
+st.download_button(
+    label="Descargar programación en Excel",
+    data=programacion.to_csv().encode("utf-8"),
+    file_name="programacion_turnos.csv",
+    mime="text/csv"
+)
